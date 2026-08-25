@@ -100,9 +100,15 @@ const MasterApp = (() => {
     const playerCount = Object.keys(players).length;
     const teamCount = Object.keys(teams).length;
 
-    // 전체 투자 현황
+    // 전체 투자 현황 (투자 + 투자안함 모두 포함)
     const investArr = Object.entries(investments).map(([id, inv]) => ({ id, ...inv }));
+    const skips = sessionData.skips || {};
     const thisTurnInvestors = new Set(investArr.filter(i => i.turn === state.currentTurn).map(i => i.playerId));
+    const thisTurnSkippers = new Set(
+      Object.values(skips).filter(s => s.turn === state.currentTurn).map(s => s.playerId)
+    );
+    const thisTurnDone = new Set([...thisTurnInvestors, ...thisTurnSkippers]);
+    const allDone = playerCount > 0 && thisTurnDone.size >= playerCount;
 
     // 만기 도래 건
     const pendingMaturity = investArr.filter(i => i.maturityTurn <= state.currentTurn && i.result === 'pending');
@@ -121,7 +127,7 @@ const MasterApp = (() => {
         <span>${state.phase === 'investing' ? '📝 투자 접수 중' : '🎲 정산 중'}</span>
         <div class="flex gap-8">
           ${state.phase === 'investing' ? `
-            <button class="btn btn-sm btn-primary" id="nextTurnBtn">
+            <button class="btn btn-sm btn-primary" id="nextTurnBtn" ${!allDone ? 'disabled' : ''}>
               다음 턴 →
             </button>
           ` : `
@@ -160,7 +166,7 @@ const MasterApp = (() => {
 
     const container = document.getElementById('tabContent');
     switch (currentTab) {
-      case 'dashboard': container.innerHTML = renderDashboard(state, teams, players, investArr); break;
+      case 'dashboard': container.innerHTML = renderDashboard(state, teams, players, investArr); bindDashboardEvents(state); break;
       case 'teams': container.innerHTML = renderTeams(teams, players); bindTeamEvents(); break;
       case 'maturity': container.innerHTML = renderMaturity(state, investArr); bindMaturityEvents(investArr); break;
       case 'all': container.innerHTML = renderAllRecords(investArr); break;
@@ -174,17 +180,25 @@ const MasterApp = (() => {
     const playerArr = Object.entries(players).map(([id, p]) => ({ id, ...p }));
 
     const thisTurn = investments.filter(i => i.turn === state.currentTurn);
+    const skips = sessionData.skips || {};
+    const thisTurnSkipSet = new Set(
+      Object.values(skips).filter(s => s.turn === state.currentTurn).map(s => s.playerId)
+    );
+    const thisTurnDoneSet = new Set([
+      ...thisTurn.map(i => i.playerId),
+      ...thisTurnSkipSet,
+    ]);
     const pendingMaturity = investments.filter(i => i.maturityTurn <= state.currentTurn && i.result === 'pending');
 
     // 팀별 투자 현황
     const teamStatus = teamArr.map(team => {
       const teamPlayers = playerArr.filter(p => p.teamId === team.id);
-      const teamInvested = new Set(thisTurn.filter(i => i.teamId === team.id).map(i => i.playerId));
+      const teamDone = teamPlayers.filter(p => thisTurnDoneSet.has(p.id));
       return {
         ...team,
         total: teamPlayers.length,
-        invested: teamInvested.size,
-        done: teamPlayers.length > 0 && teamInvested.size >= teamPlayers.length,
+        done: teamDone.length,
+        allDone: teamPlayers.length > 0 && teamDone.length >= teamPlayers.length,
       };
     });
 
@@ -199,8 +213,8 @@ const MasterApp = (() => {
           <div class="stat-label">참가자</div>
         </div>
         <div class="stat-card">
-          <div class="stat-value">${thisTurn.length}/${playerArr.length}</div>
-          <div class="stat-label">이번 턴 투자</div>
+          <div class="stat-value">${thisTurnDoneSet.size}/${playerArr.length}</div>
+          <div class="stat-label">이번 턴 완료</div>
         </div>
         <div class="stat-card">
           <div class="stat-value" style="color:var(--warning)">${pendingMaturity.length}</div>
@@ -209,17 +223,43 @@ const MasterApp = (() => {
       </div>
 
       <div class="card mt-16">
-        <div class="card-title">팀별 투자 현황 (턴 ${state.currentTurn})</div>
+        <div class="card-title">팀별 현황 (턴 ${state.currentTurn})</div>
         ${teamStatus.map(t => `
           <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--gray-100);">
             <strong>${t.name}</strong>
             <div>
-              <span style="margin-right:8px;">${t.invested}/${t.total}명</span>
-              ${t.done ? '<span class="badge badge-success">완료</span>' : '<span class="badge badge-pending">대기</span>'}
+              <span style="margin-right:8px;">${t.done}/${t.total}명</span>
+              ${t.allDone ? '<span class="badge badge-success">완료</span>' : '<span class="badge badge-pending">대기</span>'}
             </div>
           </div>
         `).join('')}
       </div>
+
+      ${(() => {
+        const notDone = playerArr.filter(p => !thisTurnDoneSet.has(p.id));
+        if (notDone.length === 0) return '';
+        return `
+          <div class="card mt-16">
+            <div class="card-title">⏳ 미완료 참가자 (${notDone.length}명)</div>
+            <p style="font-size:12px; color:var(--gray-500); margin-bottom:12px;">대리로 "투자 안 함" 처리하거나, 투자를 입력할 수 있습니다.</p>
+            ${notDone.map(p => {
+              const teamName = teamArr.find(t => t.id === p.teamId)?.name || '';
+              return `
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--gray-100);">
+                  <div>
+                    <strong>${p.name}</strong>
+                    <span style="font-size:12px; color:var(--gray-500);"> (${teamName})</span>
+                  </div>
+                  <div class="flex gap-8">
+                    <button class="btn btn-sm btn-secondary proxy-skip" data-player-id="${p.id}" data-player-name="${p.name}" data-team-id="${p.teamId || ''}">투자 안 함</button>
+                    <button class="btn btn-sm btn-primary proxy-invest" data-player-id="${p.id}" data-player-name="${p.name}" data-team-id="${p.teamId || ''}">대리 투자</button>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        `;
+      })()}
 
       <div class="card mt-16">
         <div class="card-title">참가자 접속 URL</div>
@@ -229,6 +269,75 @@ const MasterApp = (() => {
         <button class="btn btn-sm btn-secondary mt-8" id="copyUrlBtn">URL 복사</button>
       </div>
     `;
+  }
+
+  function bindDashboardEvents(state) {
+    // 대리 "투자 안 함"
+    document.querySelectorAll('.proxy-skip').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const pId = btn.dataset.playerId;
+        const pName = btn.dataset.playerName;
+        const tId = btn.dataset.teamId;
+        db.ref(`sessions/${sessionId}/skips/${state.currentTurn}_${pId}`).set({
+          playerId: pId, playerName: pName, teamId: tId,
+          turn: state.currentTurn, proxy: true, createdAt: Date.now(),
+        }).then(() => showToast(`${pName}: 투자 안 함 처리`));
+      });
+    });
+
+    // 대리 투자
+    document.querySelectorAll('.proxy-invest').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const pId = btn.dataset.playerId;
+        const pName = btn.dataset.playerName;
+        const tId = btn.dataset.teamId;
+        showProxyInvestModal(pId, pName, tId, state.currentTurn);
+      });
+    });
+
+    // URL 복사
+    const copyBtn = document.getElementById('copyUrlBtn');
+    if (copyBtn) {
+      copyBtn.addEventListener('click', () => {
+        const url = document.getElementById('playerUrl')?.textContent?.trim();
+        if (url) navigator.clipboard.writeText(url).then(() => showToast('URL 복사됨'));
+      });
+    }
+  }
+
+  function showProxyInvestModal(playerId, playerName, teamId, turn) {
+    // 간단한 모달 대신 prompt 사용
+    const productNames = PRODUCTS.map((p, i) => `${i + 1}. ${p.name} (수익${(p.profitRate*100).toFixed(0)}%)`).join('\n');
+    const choice = prompt(`${playerName} 대리 투자\n\n상품 번호를 선택하세요:\n${productNames}`);
+    if (!choice) return;
+    const idx = parseInt(choice) - 1;
+    if (idx < 0 || idx >= PRODUCTS.length) { showToast('올바른 번호를 입력해 주세요'); return; }
+    const product = PRODUCTS[idx];
+
+    const amountStr = prompt(`투자 금액 (만 원, 최소 ${product.minAmount}):`);
+    if (!amountStr) return;
+    const amount = parseInt(amountStr.replace(/[^0-9]/g, '')) || 0;
+    if (amount < product.minAmount) { showToast(`최소 ${product.minAmount}만 원 이상`); return; }
+
+    const investment = {
+      playerId, playerName, teamId,
+      turn,
+      productId: product.id,
+      productName: product.name,
+      amount,
+      profitRate: product.profitRate,
+      lossRate: product.lossRate,
+      maturityTurn: turn + MATURITY_TURNS,
+      status: 'active',
+      result: 'pending',
+      profitAmount: 0, lossAmount: 0, preserveAmount: 0,
+      proxy: true,
+      createdAt: Date.now(),
+    };
+
+    db.ref(`sessions/${sessionId}/investments`).push(investment).then(() => {
+      showToast(`${playerName}: ${product.name} ${formatAmount(amount)}만 원 대리 투자 완료`);
+    });
   }
 
   // ===== 팀 관리 =====
