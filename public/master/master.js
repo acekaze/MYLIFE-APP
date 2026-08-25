@@ -125,13 +125,16 @@ const MasterApp = (() => {
             <button class="btn btn-sm btn-primary" id="nextTurnBtn" ${!allInvested ? 'disabled title="모든 참가자 투자 완료 후 가능"' : ''}>
               다음 턴 →
             </button>
-          ` : ''}
+          ` : `
+            <button class="btn btn-sm btn-success" id="finishSettleBtn">정산 완료 → 투자 재개</button>
+          `}
         </div>
       </div>
 
       <nav class="tab-nav">
         <button class="tab-btn ${currentTab === 'dashboard' ? 'active' : ''}" data-tab="dashboard">현황</button>
         <button class="tab-btn ${currentTab === 'teams' ? 'active' : ''}" data-tab="teams">팀 관리</button>
+        <button class="tab-btn ${currentTab === 'maturity' ? 'active' : ''}" data-tab="maturity">만기 정산 ${pendingMaturity.length > 0 ? `(${pendingMaturity.length})` : ''}</button>
         <button class="tab-btn ${currentTab === 'all' ? 'active' : ''}" data-tab="all">전체 내역</button>
         <button class="tab-btn ${currentTab === 'ranking' ? 'active' : ''}" data-tab="ranking">최종 산출</button>
       </nav>
@@ -149,6 +152,9 @@ const MasterApp = (() => {
     const nextTurnBtn = document.getElementById('nextTurnBtn');
     if (nextTurnBtn) nextTurnBtn.addEventListener('click', nextTurn);
 
+    const finishSettleBtn = document.getElementById('finishSettleBtn');
+    if (finishSettleBtn) finishSettleBtn.addEventListener('click', finishSettle);
+
     document.querySelectorAll('.tab-btn').forEach(btn => {
       btn.addEventListener('click', () => { currentTab = btn.dataset.tab; renderAdmin(); });
     });
@@ -157,6 +163,7 @@ const MasterApp = (() => {
     switch (currentTab) {
       case 'dashboard': container.innerHTML = renderDashboard(state, teams, players, investArr); break;
       case 'teams': container.innerHTML = renderTeams(teams, players); bindTeamEvents(); break;
+      case 'maturity': container.innerHTML = renderMaturity(state, investArr); bindMaturityEvents(investArr); break;
       case 'all': container.innerHTML = renderAllRecords(investArr); break;
       case 'ranking': container.innerHTML = renderRanking(teams, players, investArr); break;
     }
@@ -232,43 +239,118 @@ const MasterApp = (() => {
 
     return `
       <div class="card">
-        <div class="card-title">팀 추가</div>
+        <div class="card-title">팀 일괄 생성</div>
+        <div class="flex gap-8" style="align-items:end;">
+          <div class="form-group" style="margin:0; flex:1;">
+            <label class="form-label">몇 개 조?</label>
+            <input type="number" class="form-input" id="teamCount" placeholder="예: 4" min="1" max="20" value="4">
+          </div>
+          <button class="btn btn-primary" id="bulkCreateTeamsBtn">생성</button>
+        </div>
+        <p style="font-size:12px; color:var(--gray-400); margin-top:6px;">기존 팀은 유지되고 새 팀이 추가됩니다.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">개별 팀 추가</div>
         <div class="flex gap-8">
-          <input type="text" class="form-input" id="newTeamName" placeholder="팀 이름 (예: 1조)" style="flex:1">
-          <button class="btn btn-primary" id="addTeamBtn">추가</button>
+          <input type="text" class="form-input" id="newTeamName" placeholder="팀 이름 (예: 5조)" style="flex:1">
+          <button class="btn btn-secondary" id="addTeamBtn">추가</button>
         </div>
       </div>
 
-      ${teamArr.map(team => {
-        const members = playerArr.filter(p => p.teamId === team.id);
-        return `
-          <div class="card">
-            <div class="flex-between">
-              <div class="card-title" style="margin:0">${team.name} (${members.length}명)</div>
-            </div>
-            ${members.length > 0 ? `
-              <div class="mt-8">
-                ${members.map(m => `<span class="badge" style="margin:2px; background:var(--gray-100); color:var(--gray-700);">${m.name}</span>`).join('')}
-              </div>
-            ` : '<div class="mt-8" style="color:var(--gray-400); font-size:13px;">아직 참가자가 없습니다</div>'}
+      <!-- 참가자 재배치 -->
+      ${playerArr.length > 0 ? `
+        <div class="card">
+          <div class="card-title">참가자 팀 배치</div>
+          <div class="table-wrapper">
+            <table>
+              <thead><tr><th>이름</th><th>현재 팀</th><th>변경</th></tr></thead>
+              <tbody>
+                ${playerArr.map(p => {
+                  const currentTeam = teamArr.find(t => t.id === p.teamId);
+                  return `<tr>
+                    <td><strong>${p.name}</strong></td>
+                    <td>${currentTeam ? currentTeam.name : '<span style="color:var(--danger)">미배정</span>'}</td>
+                    <td>
+                      <select class="form-select form-input-sm reassign-team" data-player-id="${p.id}" style="width:auto; min-width:100px;">
+                        <option value="">이동</option>
+                        ${teamArr.map(t => `<option value="${t.id}" ${t.id === p.teamId ? 'disabled' : ''}>${t.name}</option>`).join('')}
+                      </select>
+                    </td>
+                  </tr>`;
+                }).join('')}
+              </tbody>
+            </table>
           </div>
-        `;
-      }).join('')}
+        </div>
+      ` : ''}
 
-      ${teamArr.length === 0 ? '<div style="text-align:center; color:var(--gray-400); padding:20px;">팀을 추가해 주세요</div>' : ''}
+      <!-- 팀 목록 -->
+      ${teamArr.length > 0 ? `
+        <div class="card">
+          <div class="card-title">팀 현황</div>
+          ${teamArr.map(team => {
+            const members = playerArr.filter(p => p.teamId === team.id);
+            return `
+              <div style="padding:12px 0; border-bottom:1px solid var(--gray-100);">
+                <div class="flex-between">
+                  <strong>${team.name}</strong>
+                  <span style="color:var(--gray-500); font-size:13px;">${members.length}명</span>
+                </div>
+                ${members.length > 0 ? `<div class="mt-8">${members.map(m => `<span class="badge" style="margin:2px; background:var(--gray-100); color:var(--gray-700);">${m.name}</span>`).join('')}</div>` : ''}
+              </div>
+            `;
+          }).join('')}
+        </div>
+      ` : ''}
     `;
   }
 
   function bindTeamEvents() {
-    document.getElementById('addTeamBtn').addEventListener('click', () => {
-      const name = document.getElementById('newTeamName').value.trim();
-      if (!name) { showToast('팀 이름을 입력해 주세요'); return; }
-      const newRef = db.ref(`sessions/${sessionId}/teams`).push();
-      newRef.set({ name, createdAt: Date.now() }).then(() => {
-        showToast(`${name} 추가됨`);
+    // 일괄 생성
+    const bulkBtn = document.getElementById('bulkCreateTeamsBtn');
+    if (bulkBtn) {
+      bulkBtn.addEventListener('click', () => {
+        const count = parseInt(document.getElementById('teamCount').value) || 0;
+        if (count < 1 || count > 20) { showToast('1~20 사이로 입력해 주세요'); return; }
+
+        const existing = sessionData.teams ? Object.keys(sessionData.teams).length : 0;
+        const updates = {};
+        for (let i = 1; i <= count; i++) {
+          const key = db.ref(`sessions/${sessionId}/teams`).push().key;
+          updates[key] = { name: `${existing + i}조`, createdAt: Date.now() };
+        }
+        db.ref(`sessions/${sessionId}/teams`).update(updates).then(() => {
+          showToast(`${count}개 팀 생성됨`);
+        });
+      });
+    }
+
+    // 개별 추가
+    const addBtn = document.getElementById('addTeamBtn');
+    if (addBtn) {
+      addBtn.addEventListener('click', () => {
+        const name = document.getElementById('newTeamName').value.trim();
+        if (!name) { showToast('팀 이름을 입력해 주세요'); return; }
+        db.ref(`sessions/${sessionId}/teams`).push({ name, createdAt: Date.now() }).then(() => {
+          showToast(`${name} 추가됨`);
+        });
+      });
+    }
+
+    // 참가자 재배치
+    document.querySelectorAll('.reassign-team').forEach(select => {
+      select.addEventListener('change', e => {
+        const playerId = e.target.dataset.playerId;
+        const newTeamId = e.target.value;
+        if (!newTeamId) return;
+        db.ref(`sessions/${sessionId}/players/${playerId}/teamId`).set(newTeamId).then(() => {
+          showToast('팀 변경됨');
+        });
       });
     });
 
+    // URL 복사
     const copyBtn = document.getElementById('copyUrlBtn');
     if (copyBtn) {
       copyBtn.addEventListener('click', () => {
@@ -276,6 +358,119 @@ const MasterApp = (() => {
         if (url) navigator.clipboard.writeText(url).then(() => showToast('URL 복사됨'));
       });
     }
+  }
+
+  // ===== 만기 정산 (모니터링 + 대리 정산) =====
+  function renderMaturity(state, investments) {
+    const matured = investments.filter(i => i.maturityTurn <= state.currentTurn && i.result === 'pending');
+    const recentlySettled = investments.filter(i => i.settledAt && i.result !== 'pending')
+      .sort((a, b) => (b.settledAt || 0) - (a.settledAt || 0)).slice(0, 10);
+
+    if (matured.length === 0 && recentlySettled.length === 0) {
+      return `<div style="text-align:center; padding:40px; color:var(--gray-400);"><p>만기 도래한 투자가 없습니다</p></div>`;
+    }
+
+    return `
+      ${matured.length > 0 ? `
+        <div class="card">
+          <div class="flex-between mb-16">
+            <div class="card-title" style="margin:0">⏳ 정산 대기 (${matured.length}건)</div>
+            <button class="btn btn-sm btn-success" id="settleAllBtn">전체 대리 정산</button>
+          </div>
+          <p style="font-size:13px; color:var(--gray-500); margin-bottom:12px;">참가자가 직접 주사위를 입력합니다. 필요 시 관리자가 대리 정산할 수 있습니다.</p>
+
+          ${matured.map(inv => {
+            const product = getProductById(inv.productId);
+            return `
+              <div class="card" style="border:1px solid var(--gray-200); box-shadow:none; margin-bottom:12px;">
+                <div class="flex-between">
+                  <div>
+                    <strong>${inv.playerName}</strong>
+                    <span style="color:var(--gray-500); font-size:13px;"> | ${inv.productName} | ${formatAmount(inv.amount)}만 원</span>
+                  </div>
+                  <span class="badge badge-pending">턴 ${inv.turn}→${inv.maturityTurn}</span>
+                </div>
+                <div class="mt-8" style="font-size:12px;">${product ? diceInfoHTML(product) : ''}</div>
+                <div class="mt-12">
+                  <div class="dice-buttons">
+                    ${[1,2,3,4,5,6].map(d => {
+                      let style = '';
+                      if (product) {
+                        if (product.profitDice.includes(d)) style = 'style="color:var(--success)"';
+                        else if (product.lossDice.includes(d)) style = 'style="color:var(--danger)"';
+                        else if (product.preserveDice.includes(d)) style = 'style="color:var(--preserve)"';
+                      }
+                      return `<button class="dice-btn" data-dice="${d}" data-inv-id="${inv.id}" ${style}>${d}</button>`;
+                    }).join('')}
+                  </div>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      ` : ''}
+
+      ${recentlySettled.length > 0 ? `
+        <div class="card">
+          <div class="card-title">✅ 최근 정산 완료</div>
+          <div class="table-wrapper">
+            <table>
+              <thead><tr><th>참가자</th><th>상품</th><th class="text-center">주사위</th><th class="text-center">결과</th><th class="text-right">수익/손실</th></tr></thead>
+              <tbody>
+                ${recentlySettled.map(inv => {
+                  const net = (inv.profitAmount || 0) + (inv.lossAmount || 0);
+                  const display = inv.result === 'preserve' ? formatAmount(inv.preserveAmount) : `${net >= 0 ? '+' : ''}${formatAmount(net)}`;
+                  const cls = inv.result === 'success' ? 'amount-positive' : inv.result === 'fail' ? 'amount-negative' : '';
+                  return `<tr><td>${inv.playerName}</td><td>${inv.productName}</td><td class="text-center">${inv.diceValue}</td><td class="text-center">${resultBadge(inv.result)}</td><td class="text-right ${cls}">${display}</td></tr>`;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ` : ''}
+    `;
+  }
+
+  function bindMaturityEvents(investments) {
+    document.querySelectorAll('.dice-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const invId = btn.dataset.invId;
+        const dice = parseInt(btn.dataset.dice);
+        settleInvestment(invId, dice, investments);
+      });
+    });
+
+    const settleAllBtn = document.getElementById('settleAllBtn');
+    if (settleAllBtn) {
+      settleAllBtn.addEventListener('click', () => {
+        const state = sessionData.state || {};
+        const matured = investments.filter(i => i.maturityTurn <= state.currentTurn && i.result === 'pending');
+        matured.forEach(inv => {
+          const dice = Math.floor(Math.random() * 6) + 1;
+          settleInvestment(inv.id, dice, investments);
+        });
+      });
+    }
+  }
+
+  function settleInvestment(invId, diceValue, investments) {
+    const inv = investments.find(i => i.id === invId);
+    if (!inv) return;
+    const product = getProductById(inv.productId);
+    if (!product) return;
+
+    const result = judgeResult(product, diceValue);
+    const calc = calculateResult(inv.amount, product, result);
+
+    db.ref(`sessions/${sessionId}/investments/${invId}`).update({
+      diceValue, result,
+      profitAmount: calc.profitAmount,
+      lossAmount: calc.lossAmount,
+      preserveAmount: calc.preserveAmount,
+      settledAt: Date.now(),
+    }).then(() => {
+      showToast(`${inv.playerName}: ${resultLabel(result)} (주사위 ${diceValue})`);
+    });
   }
 
   // ===== 전체 내역 =====
@@ -405,7 +600,8 @@ const MasterApp = (() => {
         currentTurn: newTurn,
         phase: 'settling',
       }).then(() => {
-        showToast(`턴 ${newTurn} — 만기 ${willMature.length}건 정산 필요 (팀장에게 안내하세요)`);
+        currentTab = 'maturity';
+        showToast(`턴 ${newTurn} — 만기 ${willMature.length}건 정산 필요`);
       });
     } else {
       db.ref(`sessions/${sessionId}/state`).update({
@@ -415,6 +611,25 @@ const MasterApp = (() => {
         showToast(`턴 ${newTurn} 시작`);
       });
     }
+  }
+
+  function finishSettle() {
+    const investments = sessionData.investments || {};
+    const investArr = Object.entries(investments).map(([id, inv]) => ({ id, ...inv }));
+    const state = sessionData.state || {};
+    const remaining = investArr.filter(i => i.maturityTurn <= state.currentTurn && i.result === 'pending');
+
+    if (remaining.length > 0) {
+      showToast(`아직 ${remaining.length}건 정산이 남았습니다`);
+      return;
+    }
+
+    db.ref(`sessions/${sessionId}/state`).update({
+      phase: 'investing',
+    }).then(() => {
+      currentTab = 'dashboard';
+      showToast('정산 완료. 투자 접수 재개');
+    });
   }
 
   // URL 복사 이벤트 위임

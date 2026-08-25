@@ -169,7 +169,10 @@ const PlayerApp = (() => {
       });
 
       const myThisTurn = investments.filter(inv => inv.turn === currentTurn && inv.status === 'active');
-      const hasInvested = myThisTurn.length > 0;
+      const hasInvested = false; // 다중 투자 허용: 항상 투자 폼 표시
+
+      // 만기 도래한 내 투자 (주사위 입력 필요)
+      const myMatured = investments.filter(inv => inv.maturityTurn <= currentTurn && inv.result === 'pending');
 
       document.getElementById('app').innerHTML = `
         <header class="app-header">
@@ -183,14 +186,80 @@ const PlayerApp = (() => {
         </div>
 
         <div style="padding:16px;">
-          ${phase === 'investing' && !hasInvested ? renderInvestForm() : ''}
-          ${phase === 'investing' && hasInvested ? renderWaiting() : ''}
-          ${phase === 'settling' ? renderSettling() : ''}
+          ${myMatured.length > 0 ? renderMyMatured(myMatured) : ''}
+          ${phase === 'investing' ? renderInvestForm() : ''}
+          ${phase === 'settling' && myMatured.length === 0 ? renderSettling() : ''}
           ${renderPortfolio(investments)}
         </div>
       `;
 
-      if (phase === 'investing' && !hasInvested) bindInvestForm();
+      if (phase === 'investing') bindInvestForm();
+      if (myMatured.length > 0) bindMyMatured(myMatured);
+    });
+  }
+
+  // ===== 만기 도래 - 참가자가 직접 주사위 입력 =====
+  function renderMyMatured(matured) {
+    return `
+      <div class="card" style="border:2px solid var(--warning); background:var(--warning-bg);">
+        <div class="card-title">🎲 만기 도래! 주사위를 굴려주세요</div>
+        ${matured.map(inv => {
+          const product = getProductById(inv.productId);
+          return `
+            <div style="padding:12px 0; border-bottom:1px solid rgba(0,0,0,0.1);" data-matured-id="${inv.id}">
+              <div class="flex-between">
+                <div>
+                  <strong>${inv.productName}</strong>
+                  <span style="font-size:13px; color:var(--gray-600);"> | ${formatAmount(inv.amount)}만 원</span>
+                </div>
+                <span style="font-size:12px; color:var(--gray-500);">턴 ${inv.turn}→${inv.maturityTurn}</span>
+              </div>
+              <div class="mt-8" style="font-size:12px;">${product ? diceInfoHTML(product) : ''}</div>
+              <div class="mt-12">
+                <div class="dice-buttons">
+                  ${[1,2,3,4,5,6].map(d => {
+                    let style = '';
+                    if (product) {
+                      if (product.profitDice.includes(d)) style = 'style="color:var(--success)"';
+                      else if (product.lossDice.includes(d)) style = 'style="color:var(--danger)"';
+                      else if (product.preserveDice.includes(d)) style = 'style="color:var(--preserve)"';
+                    }
+                    return `<button class="dice-btn matured-dice" data-dice="${d}" data-inv-id="${inv.id}" ${style}>${d}</button>`;
+                  }).join('')}
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+  }
+
+  function bindMyMatured(matured) {
+    document.querySelectorAll('.matured-dice').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const invId = btn.dataset.invId;
+        const dice = parseInt(btn.dataset.dice);
+        const inv = matured.find(i => i.id === invId);
+        if (!inv) return;
+
+        const product = getProductById(inv.productId);
+        if (!product) return;
+
+        const result = judgeResult(product, dice);
+        const calc = calculateResult(inv.amount, product, result);
+
+        db.ref(`sessions/${sessionId}/investments/${invId}`).update({
+          diceValue: dice,
+          result,
+          profitAmount: calc.profitAmount,
+          lossAmount: calc.lossAmount,
+          preserveAmount: calc.preserveAmount,
+          settledAt: Date.now(),
+        }).then(() => {
+          showToast(`${inv.productName}: ${resultLabel(result)} (주사위 ${dice})`);
+        });
+      });
     });
   }
 
@@ -229,13 +298,7 @@ const PlayerApp = (() => {
   }
 
   function renderWaiting() {
-    return `
-      <div class="card" style="text-align:center; padding:30px 20px;">
-        <div style="font-size:32px; margin-bottom:8px;">✅</div>
-        <div style="font-size:16px; font-weight:700;">턴 ${currentTurn} 투자 완료</div>
-        <div style="color:var(--gray-500); font-size:14px;">다음 턴을 기다려 주세요.</div>
-      </div>
-    `;
+    return '';
   }
 
   function renderSettling() {
