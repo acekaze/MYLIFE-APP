@@ -100,10 +100,9 @@ const MasterApp = (() => {
     const playerCount = Object.keys(players).length;
     const teamCount = Object.keys(teams).length;
 
-    // 전체 투자 완료 여부 체크
+    // 전체 투자 현황
     const investArr = Object.entries(investments).map(([id, inv]) => ({ id, ...inv }));
     const thisTurnInvestors = new Set(investArr.filter(i => i.turn === state.currentTurn).map(i => i.playerId));
-    const allInvested = playerCount > 0 && thisTurnInvestors.size >= playerCount;
 
     // 만기 도래 건
     const pendingMaturity = investArr.filter(i => i.maturityTurn <= state.currentTurn && i.result === 'pending');
@@ -122,7 +121,7 @@ const MasterApp = (() => {
         <span>${state.phase === 'investing' ? '📝 투자 접수 중' : '🎲 정산 중'}</span>
         <div class="flex gap-8">
           ${state.phase === 'investing' ? `
-            <button class="btn btn-sm btn-primary" id="nextTurnBtn" ${!allInvested ? 'disabled title="모든 참가자 투자 완료 후 가능"' : ''}>
+            <button class="btn btn-sm btn-primary" id="nextTurnBtn">
               다음 턴 →
             </button>
           ` : `

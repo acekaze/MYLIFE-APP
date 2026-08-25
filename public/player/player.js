@@ -294,6 +294,10 @@ const PlayerApp = (() => {
           <button class="btn btn-primary btn-block btn-lg mt-12" id="submitInvestBtn">투자하기</button>
         </div>
       </div>
+
+      <div class="mt-12" style="text-align:center;">
+        <button class="btn btn-secondary" id="skipInvestBtn">이번 턴 투자 안 함</button>
+      </div>
     `;
   }
 
@@ -432,6 +436,20 @@ const PlayerApp = (() => {
         showToast('투자 완료!');
       }).catch(() => showToast('저장 실패. 다시 시도해 주세요'));
     });
+
+    // 투자 안 함
+    const skipBtn = document.getElementById('skipInvestBtn');
+    if (skipBtn) {
+      skipBtn.addEventListener('click', () => {
+        db.ref(`sessions/${sessionId}/skips/${currentTurn}_${playerId}`).set({
+          playerId, playerName, teamId: playerTeam,
+          turn: currentTurn,
+          createdAt: Date.now(),
+        }).then(() => {
+          showToast('이번 턴은 투자하지 않습니다');
+        });
+      });
+    }
   }
 
   document.addEventListener('DOMContentLoaded', init);
