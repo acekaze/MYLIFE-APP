@@ -432,12 +432,30 @@ const AdminApp = (() => {
   function nextTurn() {
     const state = sessionData.state || {};
     const newTurn = (state.currentTurn || 1) + 1;
-    db.ref(`sessions/${sessionId}/state`).update({
-      currentTurn: newTurn,
-      phase: 'investing',
-    }).then(() => {
-      showToast(`턴 ${newTurn} 시작`);
-    });
+
+    // 다음 턴에서 만기 도래 건이 있는지 확인
+    const investments = sessionData.investments || {};
+    const investArr = Object.entries(investments).map(([id, inv]) => ({ id, ...inv }));
+    const willMature = investArr.filter(i => i.maturityTurn <= newTurn && i.result === 'pending');
+
+    if (willMature.length > 0) {
+      // 만기 도래 건이 있으면 → 정산 모드로 진입
+      db.ref(`sessions/${sessionId}/state`).update({
+        currentTurn: newTurn,
+        phase: 'settling',
+      }).then(() => {
+        currentTab = 'maturity';
+        showToast(`턴 ${newTurn} — 만기 도래 ${willMature.length}건 정산 필요`);
+      });
+    } else {
+      // 만기 도래 없으면 → 바로 투자 접수
+      db.ref(`sessions/${sessionId}/state`).update({
+        currentTurn: newTurn,
+        phase: 'investing',
+      }).then(() => {
+        showToast(`턴 ${newTurn} 시작`);
+      });
+    }
   }
 
   function startSettle() {
@@ -450,13 +468,22 @@ const AdminApp = (() => {
   }
 
   function finishSettle() {
+    // 아직 정산 안 된 건이 있는지 체크
+    const investments = sessionData.investments || {};
+    const investArr = Object.entries(investments).map(([id, inv]) => ({ id, ...inv }));
     const state = sessionData.state || {};
-    const newTurn = (state.currentTurn || 1) + 1;
+    const remaining = investArr.filter(i => i.maturityTurn <= state.currentTurn && i.result === 'pending');
+
+    if (remaining.length > 0) {
+      showToast(`아직 ${remaining.length}건 정산이 남았습니다`);
+      return;
+    }
+
     db.ref(`sessions/${sessionId}/state`).update({
-      currentTurn: newTurn,
       phase: 'investing',
     }).then(() => {
-      showToast(`정산 완료. 턴 ${newTurn} 시작`);
+      currentTab = 'dashboard';
+      showToast('정산 완료. 투자 접수 재개');
     });
   }
 

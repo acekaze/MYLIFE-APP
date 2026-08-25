@@ -14,7 +14,6 @@ const PlayerApp = (() => {
   let currentTurn = 0;
 
   function init() {
-    // URL에서 세션코드 확인
     const params = new URLSearchParams(window.location.search);
     sessionId = params.get('session');
 
@@ -64,14 +63,12 @@ const PlayerApp = (() => {
     sessionId = code;
     playerName = name;
 
-    // Firebase에서 세션 확인
     db.ref(`sessions/${sessionId}`).once('value').then(snap => {
       if (!snap.exists()) {
         showToast('존재하지 않는 세션 코드입니다');
         return;
       }
 
-      // 참가자 등록 (같은 이름이 있으면 기존 ID 사용)
       db.ref(`sessions/${sessionId}/players`).once('value').then(playersSnap => {
         const players = playersSnap.val() || {};
         let existingId = null;
@@ -101,17 +98,27 @@ const PlayerApp = (() => {
   }
 
   function enterSession() {
-    // 세션 상태 실시간 감시
+    // 세션 상태 + 투자 기록 실시간 감시
     db.ref(`sessions/${sessionId}/state`).on('value', snap => {
       const state = snap.val() || {};
       currentTurn = state.currentTurn || 1;
-      const phase = state.phase || 'investing'; // investing | settling
+      const phase = state.phase || 'investing';
       renderMain(phase);
+    });
+
+    // 투자 기록 변경 시에도 화면 갱신
+    db.ref(`sessions/${sessionId}/investments`).on('value', () => {
+      const stateRef = db.ref(`sessions/${sessionId}/state`);
+      stateRef.once('value').then(snap => {
+        const state = snap.val() || {};
+        currentTurn = state.currentTurn || 1;
+        const phase = state.phase || 'investing';
+        renderMain(phase);
+      });
     });
   }
 
   function renderMain(phase) {
-    // 내 투자 기록 가져오기
     db.ref(`sessions/${sessionId}/investments`).orderByChild('playerId').equalTo(playerId).once('value').then(snap => {
       const investments = [];
       snap.forEach(child => {
@@ -139,7 +146,7 @@ const PlayerApp = (() => {
           ${phase === 'investing' && hasInvested ? renderWaiting() : ''}
           ${phase === 'settling' ? renderSettling() : ''}
 
-          ${renderMyRecords(investments)}
+          ${renderPortfolio(investments)}
         </div>
       `;
 
@@ -182,71 +189,115 @@ const PlayerApp = (() => {
 
   function renderWaiting() {
     return `
-      <div class="card" style="text-align:center; padding:40px 20px;">
-        <div style="font-size:40px; margin-bottom:12px;">✅</div>
-        <div style="font-size:18px; font-weight:700; margin-bottom:8px;">투자 완료</div>
-        <div style="color:var(--gray-500)">턴 ${currentTurn} 투자가 접수됐습니다.<br>다음 턴을 기다려 주세요.</div>
+      <div class="card" style="text-align:center; padding:30px 20px;">
+        <div style="font-size:32px; margin-bottom:8px;">✅</div>
+        <div style="font-size:16px; font-weight:700; margin-bottom:6px;">턴 ${currentTurn} 투자 완료</div>
+        <div style="color:var(--gray-500); font-size:14px;">다음 턴을 기다려 주세요.</div>
       </div>
     `;
   }
 
   function renderSettling() {
     return `
-      <div class="card" style="text-align:center; padding:40px 20px;">
-        <div style="font-size:40px; margin-bottom:12px;">🎲</div>
-        <div style="font-size:18px; font-weight:700; margin-bottom:8px;">결과 정산 중</div>
-        <div style="color:var(--gray-500)">진행자가 주사위를 굴리고 있습니다.</div>
+      <div class="card" style="text-align:center; padding:30px 20px;">
+        <div style="font-size:32px; margin-bottom:8px;">🎲</div>
+        <div style="font-size:16px; font-weight:700; margin-bottom:6px;">결과 정산 중</div>
+        <div style="color:var(--gray-500); font-size:14px;">진행자가 주사위를 굴리고 있습니다.</div>
       </div>
     `;
   }
 
-  function renderMyRecords(investments) {
+  // ===== 내 투자 현황 (항상 표시) =====
+  function renderPortfolio(investments) {
+    if (investments.length === 0) return '';
+
+    const active = investments.filter(inv => inv.result === 'pending');
     const settled = investments.filter(inv => inv.result && inv.result !== 'pending');
-    if (settled.length === 0) return '';
 
     const totalProfit = settled.reduce((s, inv) => s + (inv.profitAmount || 0), 0);
     const totalLoss = settled.reduce((s, inv) => s + (inv.lossAmount || 0), 0);
+    const totalPreserve = settled.reduce((s, inv) => s + (inv.preserveAmount || 0), 0);
+    const netResult = totalProfit + totalLoss;
 
     return `
-      <div class="card mt-16">
-        <div class="card-title">내 투자 결과</div>
-        <div class="stats-grid mb-16">
-          <div class="stat-card">
-            <div class="stat-value amount-positive">+${formatAmount(totalProfit)}</div>
-            <div class="stat-label">총 수익</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value amount-negative">${formatAmount(totalLoss)}</div>
-            <div class="stat-label">총 손실</div>
-          </div>
+      <!-- 요약 통계 -->
+      <div class="stats-grid mt-16">
+        <div class="stat-card">
+          <div class="stat-value">${investments.length}</div>
+          <div class="stat-label">총 투자</div>
         </div>
-        <div class="table-wrapper">
-          <table>
-            <thead>
-              <tr><th>턴</th><th>상품</th><th class="text-right">금액</th><th class="text-center">결과</th><th class="text-right">수익/손실</th></tr>
-            </thead>
-            <tbody>
-              ${settled.map(inv => {
-                const net = (inv.profitAmount || 0) + (inv.lossAmount || 0);
-                return `<tr>
-                  <td>${inv.turn}</td>
-                  <td>${inv.productName}</td>
-                  <td class="text-right">${formatAmount(inv.amount)}</td>
-                  <td class="text-center">${resultBadge(inv.result)}</td>
-                  <td class="text-right ${net >= 0 ? 'amount-positive' : 'amount-negative'}">${net >= 0 ? '+' : ''}${formatAmount(net)}</td>
-                </tr>`;
-              }).join('')}
-            </tbody>
-          </table>
+        <div class="stat-card">
+          <div class="stat-value" style="color:var(--warning)">${active.length}</div>
+          <div class="stat-label">진행중</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value amount-positive">+${formatAmount(totalProfit)}</div>
+          <div class="stat-label">총 수익</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value amount-negative">${formatAmount(totalLoss)}</div>
+          <div class="stat-label">총 손실</div>
         </div>
       </div>
+
+      <!-- 진행 중인 투자 -->
+      ${active.length > 0 ? `
+        <div class="card mt-16">
+          <div class="card-title">📊 진행 중인 투자</div>
+          ${active.map(inv => `
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--gray-100);">
+              <div>
+                <strong>${inv.productName}</strong>
+                <div style="font-size:12px; color:var(--gray-500);">턴 ${inv.turn} 투자 → 턴 ${inv.maturityTurn} 만기</div>
+              </div>
+              <div style="text-align:right;">
+                <div style="font-weight:700;">${formatAmount(inv.amount)}만 원</div>
+                <div style="font-size:12px; color:var(--warning);">만기까지 ${Math.max(0, inv.maturityTurn - currentTurn)}턴</div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      ` : ''}
+
+      <!-- 완료된 투자 -->
+      ${settled.length > 0 ? `
+        <div class="card mt-16">
+          <div class="card-title">📋 완료된 투자</div>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr><th>턴</th><th>상품</th><th class="text-right">금액</th><th class="text-center">결과</th><th class="text-right">수익/손실</th></tr>
+              </thead>
+              <tbody>
+                ${settled.map(inv => {
+                  const net = (inv.profitAmount || 0) + (inv.lossAmount || 0);
+                  const display = inv.result === 'preserve' ? formatAmount(inv.preserveAmount) :
+                    `${net >= 0 ? '+' : ''}${formatAmount(net)}`;
+                  const cls = inv.result === 'success' ? 'amount-positive' :
+                    inv.result === 'fail' ? 'amount-negative' : '';
+                  return `<tr>
+                    <td>${inv.turn}</td>
+                    <td>${inv.productName}</td>
+                    <td class="text-right">${formatAmount(inv.amount)}</td>
+                    <td class="text-center">${resultBadge(inv.result)}</td>
+                    <td class="text-right ${cls}">${display}</td>
+                  </tr>`;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+          <div style="margin-top:12px; padding-top:12px; border-top:1px solid var(--gray-200); display:flex; justify-content:space-between;">
+            <span style="font-weight:600;">순수익</span>
+            <span class="${netResult >= 0 ? 'amount-positive' : 'amount-negative'}" style="font-size:18px; font-weight:700;">${netResult >= 0 ? '+' : ''}${formatAmount(netResult)}만 원</span>
+          </div>
+        </div>
+      ` : ''}
     `;
   }
 
   function bindInvestForm() {
     let selectedProduct = null;
 
-    // 상품 선택
     document.getElementById('productGrid').addEventListener('click', e => {
       const card = e.target.closest('.product-card');
       if (!card) return;
@@ -260,7 +311,6 @@ const PlayerApp = (() => {
       document.getElementById('amountInput').focus();
     });
 
-    // 금액 입력 포맷
     const amountInput = document.getElementById('amountInput');
     amountInput.addEventListener('input', e => {
       const raw = e.target.value.replace(/[^0-9]/g, '');
@@ -271,7 +321,6 @@ const PlayerApp = (() => {
       }
     });
 
-    // 투자 제출
     document.getElementById('submitInvestBtn').addEventListener('click', () => {
       if (!selectedProduct) { showToast('상품을 선택해 주세요'); return; }
 
@@ -283,7 +332,6 @@ const PlayerApp = (() => {
         return;
       }
 
-      // Firebase에 저장
       const investment = {
         playerId: playerId,
         playerName: playerName,
@@ -304,7 +352,6 @@ const PlayerApp = (() => {
 
       db.ref(`sessions/${sessionId}/investments`).push(investment).then(() => {
         showToast('투자 완료!');
-        renderMain('investing');
       }).catch(err => {
         showToast('저장 실패. 다시 시도해 주세요');
         console.error(err);
