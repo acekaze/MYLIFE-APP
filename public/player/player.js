@@ -14,10 +14,15 @@ const PlayerApp = (() => {
     const params = new URLSearchParams(window.location.search);
     sessionId = params.get('session');
 
-    if (sessionId && localStorage.getItem('mylife_player_id')) {
-      playerId = localStorage.getItem('mylife_player_id');
+    // 이전 세션과 같은 세션이고 이미 등록된 참가자인 경우에만 자동 입장
+    const savedSession = localStorage.getItem('mylife_session_id');
+    const savedPlayer = localStorage.getItem('mylife_player_id');
+    const savedTeam = localStorage.getItem('mylife_player_team');
+
+    if (sessionId && savedPlayer && savedTeam && savedSession === sessionId) {
+      playerId = savedPlayer;
       playerName = localStorage.getItem('mylife_player_name') || '';
-      playerTeam = localStorage.getItem('mylife_player_team') || '';
+      playerTeam = savedTeam;
       enterSession();
     } else {
       renderLogin();
@@ -25,7 +30,7 @@ const PlayerApp = (() => {
   }
 
   function renderLogin() {
-    // 먼저 세션에서 팀 목록 가져오기
+    // 세션코드가 URL에 있으면 바로 팀 목록 로드
     if (sessionId) {
       db.ref(`sessions/${sessionId}/teams`).once('value').then(snap => {
         const teams = snap.val() || {};
@@ -37,6 +42,7 @@ const PlayerApp = (() => {
   }
 
   function renderLoginForm(teams) {
+    const showTeams = teams.length > 0;
     document.getElementById('app').innerHTML = `
       <div class="entry-screen">
         <h1>My Life<br><small>투자 보드게임</small></h1>
@@ -45,26 +51,26 @@ const PlayerApp = (() => {
             <label class="form-label">세션 코드</label>
             <input type="text" class="form-input" id="sessionCode" 
                    placeholder="진행자가 알려준 코드" value="${sessionId || ''}" 
-                   style="text-transform:uppercase">
+                   ${sessionId ? 'readonly style="text-transform:uppercase; background:var(--gray-100);"' : 'style="text-transform:uppercase"'}>
           </div>
           <div class="form-group">
             <label class="form-label">이름</label>
             <input type="text" class="form-input" id="playerNameInput" 
                    placeholder="본인 이름 입력" value="${playerName}">
           </div>
-          <div class="form-group" id="teamSelectGroup" ${teams.length === 0 ? 'style="display:none"' : ''}>
+          <div class="form-group" id="teamSelectGroup" ${!showTeams ? 'style="display:none"' : ''}>
             <label class="form-label">팀 선택</label>
             <select class="form-select" id="teamSelect">
               <option value="">팀을 선택하세요</option>
               ${teams.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
             </select>
           </div>
-          <button class="btn btn-primary btn-block btn-lg" id="joinBtn">입장</button>
+          <button class="btn btn-primary btn-block btn-lg mt-12" id="joinBtn">입장</button>
         </div>
       </div>
     `;
 
-    // 세션 코드 입력 시 팀 목록 로드
+    // 세션 코드 수동 입력 시 팀 목록 로드
     document.getElementById('sessionCode').addEventListener('blur', e => {
       const code = e.target.value.trim().toUpperCase();
       if (code && code !== sessionId) {
