@@ -109,6 +109,21 @@ function resultBadge(result) {
   return `<span class="badge ${cls}">${label}</span>`;
 }
 
+// 주사위 판정 표시 HTML (상품 카드용)
+function diceInfoHTML(product) {
+  let lines = [];
+  if (product.profitDice.length > 0) {
+    lines.push(`<span style="color:var(--success)">성공: ${product.profitDice.join(',')}</span>`);
+  }
+  if (product.preserveDice.length > 0) {
+    lines.push(`<span style="color:var(--preserve)">원금보존: ${product.preserveDice.join(',')}</span>`);
+  }
+  if (product.lossDice.length > 0) {
+    lines.push(`<span style="color:var(--danger)">실패: ${product.lossDice.join(',')}</span>`);
+  }
+  return lines.join(' · ');
+}
+
 // 토스트
 function showToast(message, duration = 2000) {
   let toast = document.getElementById('toast');

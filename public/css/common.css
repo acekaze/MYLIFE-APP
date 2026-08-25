@@ -191,6 +191,11 @@ body {
   font-size: 14px;
 }
 
+.dice-info {
+  font-size: 12px;
+  line-height: 1.8;
+}
+
 .rate-profit { color: var(--success); font-weight: 600; }
 .rate-loss { color: var(--danger); font-weight: 600; }
 
