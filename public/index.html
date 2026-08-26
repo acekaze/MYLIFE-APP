@@ -1,18 +1,27 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>My Life 투자관리</title>
-  <link rel="stylesheet" href="css/common.css">
+  <title>My Life 투자 보드게임</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="js/tailwind-config.js"></script>
+  <style>body { font-family: 'Hanken Grotesk', sans-serif; background-color: #F5F6F8; }</style>
 </head>
-<body>
-  <div class="entry-screen">
-    <h1>My Life<br><small>투자 보드게임</small></h1>
-    <div class="entry-buttons">
-      <a href="player/" class="btn btn-primary btn-lg">참가자 입장</a>
-      <a href="master/" class="btn btn-secondary btn-lg">관리자</a>
+<body class="min-h-screen flex flex-col items-center justify-center p-5">
+  <main class="w-full max-w-[320px] flex flex-col items-center">
+    <header class="text-center mb-10">
+      <h1 class="text-[32px] font-bold text-on-surface tracking-tight">My Life</h1>
+      <p class="text-[14px] text-brand-gray-text mt-1">투자 보드게임</p>
+    </header>
+    <div class="flex flex-col gap-4 w-full">
+      <a href="player/" class="w-full h-[52px] bg-brand-blue text-white rounded-xl font-bold text-[16px] flex items-center justify-center hover:opacity-90 active:scale-[0.98] transition-all">참가자 입장</a>
+      <a href="master/" class="w-full h-[52px] bg-white text-on-surface border border-outline-variant rounded-xl font-bold text-[16px] flex items-center justify-center hover:bg-surface-container-low active:scale-[0.98] transition-all shadow-card">관리자</a>
     </div>
-  </div>
+    <footer class="mt-10 text-center">
+      <p class="text-[12px] text-outline-variant">© My Life 투자 보드게임</p>
+    </footer>
+  </main>
 </body>
 </html>

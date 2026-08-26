@@ -1,14 +1,36 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="ko" class="h-full">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>My Life - 총괄 관리자</title>
-  <link rel="stylesheet" href="../css/common.css">
+  <title>My Life - 관리자</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+  <script src="../js/tailwind-config.js"></script>
+  <style>
+    body { font-family: 'Hanken Grotesk', sans-serif; background-color: #F5F6F8; }
+    .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+    .material-symbols-outlined.fill { font-variation-settings: 'FILL' 1; }
+    .bento-card { background: #fff; border-radius: 1rem; padding: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); transition: box-shadow 0.2s; }
+    .bento-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.10); }
+    .dice-btn { width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; border-radius: 0.5rem; font-weight: 600; cursor: pointer; transition: all 0.2s; border: 2px solid transparent; background: #F5F6F8; }
+    .dice-btn:hover { transform: scale(1.05); }
+    .dice-success { border-color: #00C48C; color: #00C48C; }
+    .dice-preserve { border-color: #8B5CF6; color: #8B5CF6; }
+    .dice-fail { border-color: #FF4D4D; color: #FF4D4D; }
+    .chip-success { background: rgba(0,196,140,0.15); color: #00996D; }
+    .chip-fail { background: rgba(255,77,77,0.15); color: #DC2626; }
+    .chip-preserve { background: rgba(139,92,246,0.15); color: #6D28D9; }
+    .nav-item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 12px; font-size: 14px; font-weight: 500; color: #414754; transition: all 0.2s; cursor: pointer; }
+    .nav-item:hover { background: #e7e8ea; }
+    .nav-item.active { background: #1071e5; color: #fff; font-weight: 700; }
+    .nav-item.active .material-symbols-outlined { font-variation-settings: 'FILL' 1; }
+  </style>
 </head>
-<body>
-  <div id="app"></div>
-  <div id="toast" class="toast hidden"></div>
+<body class="h-full flex flex-col text-on-surface antialiased overflow-hidden">
+  <div id="app" class="flex flex-col h-full"></div>
+  <div id="toast" class="fixed bottom-5 left-1/2 -translate-x-1/2 bg-inverse-surface text-inverse-on-surface px-6 py-3 rounded-xl text-sm font-medium z-[9999] opacity-0 pointer-events-none transition-opacity duration-300"></div>
 
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>

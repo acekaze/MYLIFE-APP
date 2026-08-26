@@ -1,8 +1,6 @@
 /**
- * 참가자 뷰 (모바일)
- * 세션코드 + 이름 + 팀 선택 → 상품+금액 입력 → 현황 확인
+ * 참가자 뷰 (Stitch 디자인 적용)
  */
-
 const PlayerApp = (() => {
   let sessionId = null;
   let playerId = null;
@@ -13,8 +11,6 @@ const PlayerApp = (() => {
   function init() {
     const params = new URLSearchParams(window.location.search);
     sessionId = params.get('session');
-
-    // 이전 세션과 같은 세션이고 이미 등록된 참가자인 경우에만 자동 입장
     const savedSession = localStorage.getItem('mylife_session_id');
     const savedPlayer = localStorage.getItem('mylife_player_id');
     const savedTeam = localStorage.getItem('mylife_player_team');
@@ -29,8 +25,8 @@ const PlayerApp = (() => {
     }
   }
 
+  // ===== LOGIN =====
   function renderLogin() {
-    // 세션코드가 URL에 있으면 바로 팀 목록 로드
     if (sessionId) {
       db.ref(`sessions/${sessionId}/teams`).once('value').then(snap => {
         const teams = snap.val() || {};
@@ -44,54 +40,62 @@ const PlayerApp = (() => {
   function renderLoginForm(teams) {
     const showTeams = teams.length > 0;
     document.getElementById('app').innerHTML = `
-      <div class="entry-screen">
-        <h1>My Life<br><small>투자 보드게임</small></h1>
-        <div class="card" style="width:100%; max-width:320px;">
-          <div class="form-group">
-            <label class="form-label">세션 코드</label>
-            <input type="text" class="form-input" id="sessionCode" 
-                   placeholder="진행자가 알려준 코드" value="${sessionId || ''}" 
-                   ${sessionId ? 'readonly style="text-transform:uppercase; background:var(--gray-100);"' : 'style="text-transform:uppercase"'}>
+      <div class="min-h-screen flex flex-col items-center justify-center p-5">
+        <main class="w-full max-w-[320px] flex flex-col items-center">
+          <header class="text-center mb-8 w-full">
+            <h1 class="text-[28px] font-bold text-on-surface tracking-tight">My Life</h1>
+            <p class="text-[14px] text-brand-gray-text mt-1">투자 보드게임</p>
+          </header>
+          <div class="bg-white rounded-2xl p-6 w-full shadow-card">
+            <form id="loginForm" class="flex flex-col gap-5">
+              <div class="flex flex-col gap-2">
+                <label class="text-[13px] font-medium text-brand-gray-text">세션 코드</label>
+                <input type="text" id="sessionCode" class="custom-input uppercase font-medium text-[16px]"
+                  placeholder="진행자가 알려준 코드" value="${sessionId || ''}" ${sessionId ? 'readonly style="background:#F2F4F6;"' : ''}>
+              </div>
+              <div class="flex flex-col gap-2">
+                <label class="text-[13px] font-medium text-brand-gray-text">이름</label>
+                <input type="text" id="playerNameInput" class="custom-input font-medium text-[16px]"
+                  placeholder="본인 이름 입력" value="${playerName}">
+              </div>
+              <div class="flex flex-col gap-2" id="teamSelectGroup" ${!showTeams ? 'style="display:none"' : ''}>
+                <label class="text-[13px] font-medium text-brand-gray-text">팀 선택</label>
+                <select id="teamSelect" class="custom-input custom-select font-medium text-[16px]">
+                  <option value="" disabled selected>팀을 선택하세요</option>
+                  ${teams.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
+                </select>
+              </div>
+              <button type="submit" class="w-full h-[52px] bg-brand-blue text-white font-bold text-[16px] rounded-xl mt-2 hover:opacity-90 active:scale-[0.98] transition-all">
+                입장
+              </button>
+            </form>
           </div>
-          <div class="form-group">
-            <label class="form-label">이름</label>
-            <input type="text" class="form-input" id="playerNameInput" 
-                   placeholder="본인 이름 입력" value="${playerName}">
-          </div>
-          <div class="form-group" id="teamSelectGroup" ${!showTeams ? 'style="display:none"' : ''}>
-            <label class="form-label">팀 선택</label>
-            <select class="form-select" id="teamSelect">
-              <option value="">팀을 선택하세요</option>
-              ${teams.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
-            </select>
-          </div>
-          <button class="btn btn-primary btn-block btn-lg mt-12" id="joinBtn">입장</button>
-        </div>
+          <footer class="mt-8 text-center">
+            <p class="text-[12px] text-outline-variant">© My Life 투자 보드게임</p>
+          </footer>
+        </main>
       </div>
     `;
 
-    // 세션 코드 수동 입력 시 팀 목록 로드
     document.getElementById('sessionCode').addEventListener('blur', e => {
       const code = e.target.value.trim().toUpperCase();
       if (code && code !== sessionId) {
         sessionId = code;
         db.ref(`sessions/${code}/teams`).once('value').then(snap => {
           const teams = snap.val() || {};
-          const teamArr = Object.entries(teams).map(([id, t]) => ({ id, ...t }));
-          const group = document.getElementById('teamSelectGroup');
-          const select = document.getElementById('teamSelect');
-          if (teamArr.length > 0) {
-            group.style.display = 'block';
-            select.innerHTML = '<option value="">팀을 선택하세요</option>' +
-              teamArr.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+          const arr = Object.entries(teams).map(([id, t]) => ({ id, ...t }));
+          if (arr.length > 0) {
+            document.getElementById('teamSelectGroup').style.display = 'flex';
+            document.getElementById('teamSelect').innerHTML = '<option value="" disabled selected>팀을 선택하세요</option>' +
+              arr.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
           }
         });
       }
     });
 
-    document.getElementById('joinBtn').addEventListener('click', joinSession);
-    document.getElementById('playerNameInput').addEventListener('keydown', e => {
-      if (e.key === 'Enter') joinSession();
+    document.getElementById('loginForm').addEventListener('submit', e => {
+      e.preventDefault();
+      joinSession();
     });
   }
 
@@ -109,49 +113,36 @@ const PlayerApp = (() => {
     playerTeam = teamId;
 
     db.ref(`sessions/${sessionId}`).once('value').then(snap => {
-      if (!snap.exists()) {
-        showToast('존재하지 않는 세션 코드입니다');
-        return;
-      }
-
-      // 참가자 등록
+      if (!snap.exists()) { showToast('존재하지 않는 세션입니다'); return; }
       db.ref(`sessions/${sessionId}/players`).once('value').then(playersSnap => {
         const players = playersSnap.val() || {};
         let existingId = null;
-
         Object.entries(players).forEach(([id, p]) => {
           if (p.name === playerName && p.teamId === teamId) existingId = id;
         });
-
         if (existingId) {
           playerId = existingId;
         } else {
           const newRef = db.ref(`sessions/${sessionId}/players`).push();
           playerId = newRef.key;
-          newRef.set({ name: playerName, teamId: teamId, joinedAt: Date.now() });
+          newRef.set({ name: playerName, teamId, joinedAt: Date.now() });
         }
-
         localStorage.setItem('mylife_player_id', playerId);
         localStorage.setItem('mylife_player_name', playerName);
         localStorage.setItem('mylife_player_team', playerTeam);
         localStorage.setItem('mylife_session_id', sessionId);
-
         enterSession();
       });
-    }).catch(err => {
-      showToast('연결 실패. 네트워크를 확인해 주세요');
-      console.error(err);
-    });
+    }).catch(() => showToast('연결 실패'));
   }
 
+  // ===== SESSION =====
   function enterSession() {
     db.ref(`sessions/${sessionId}/state`).on('value', snap => {
       const state = snap.val() || {};
       currentTurn = state.currentTurn || 1;
-      const phase = state.phase || 'investing';
-      renderMain(phase);
+      renderMain(state.phase || 'investing');
     });
-
     db.ref(`sessions/${sessionId}/investments`).on('value', () => {
       db.ref(`sessions/${sessionId}/state`).once('value').then(snap => {
         const state = snap.val() || {};
@@ -161,230 +152,95 @@ const PlayerApp = (() => {
     });
   }
 
+  // ===== MAIN RENDER =====
   function renderMain(phase) {
     db.ref(`sessions/${sessionId}/investments`).orderByChild('playerId').equalTo(playerId).once('value').then(snap => {
       const investments = [];
-      snap.forEach(child => {
-        investments.push({ id: child.key, ...child.val() });
-      });
+      snap.forEach(child => investments.push({ id: child.key, ...child.val() }));
 
-      const myThisTurn = investments.filter(inv => inv.turn === currentTurn && inv.status === 'active');
-      const hasInvested = false; // 다중 투자 허용: 항상 투자 폼 표시
-
-      // 만기 도래한 내 투자 (주사위 입력 필요)
       const myMatured = investments.filter(inv => inv.maturityTurn <= currentTurn && inv.result === 'pending');
+      const active = investments.filter(inv => inv.result === 'pending');
+      const settled = investments.filter(inv => inv.result && inv.result !== 'pending');
+      const totalProfit = settled.reduce((s, i) => s + (i.profitAmount || 0), 0);
+      const totalLoss = settled.reduce((s, i) => s + (i.lossAmount || 0), 0);
+      const netResult = totalProfit + totalLoss;
 
       document.getElementById('app').innerHTML = `
-        <header class="app-header">
-          <div><h1>My Life 투자</h1></div>
-          <div class="subtitle">${playerName}</div>
-        </header>
+        <div class="w-full max-w-[390px] mx-auto min-h-screen bg-background relative">
+          <!-- Header -->
+          <header class="sticky top-0 w-full z-50 bg-brand-blue h-[56px] flex items-center justify-between px-4 shadow-sm">
+            <h1 class="text-white font-bold text-[17px]">My Life 투자</h1>
+            <span class="text-white font-medium text-[14px]">${playerName}</span>
+          </header>
 
-        <div class="status-bar">
-          <span class="turn-badge">턴 ${currentTurn}</span>
-          <span>${phase === 'investing' ? '투자 접수 중' : '결과 정산 중'}</span>
-        </div>
+          <!-- Status Strip -->
+          <div class="bg-white h-[44px] flex items-center justify-between px-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
+            <div class="bg-brand-blue text-white text-xs font-bold rounded-full px-3 py-1">턴 ${currentTurn}</div>
+            <span class="text-brand-gray-text text-sm font-medium">${phase === 'investing' ? '투자 접수 중' : '결과 정산 중'}</span>
+          </div>
 
-        <div style="padding:16px;">
-          ${myMatured.length > 0 ? renderMyMatured(myMatured) : ''}
-          ${phase === 'investing' ? renderInvestForm() : ''}
-          ${phase === 'settling' && myMatured.length === 0 ? renderSettling() : ''}
-          ${renderPortfolio(investments)}
+          <!-- Content -->
+          <main class="p-4 pb-20 space-y-4">
+            ${myMatured.length > 0 ? renderDiceSection(myMatured) : ''}
+            ${phase === 'investing' ? renderInvestForm() : ''}
+            ${renderStats(investments.length, active.length, totalProfit, totalLoss)}
+            ${active.length > 0 ? renderActiveInvestments(active) : ''}
+            ${settled.length > 0 ? renderSettledInvestments(settled, netResult) : ''}
+          </main>
         </div>
       `;
 
       if (phase === 'investing') bindInvestForm();
-      if (myMatured.length > 0) bindMyMatured(myMatured);
+      if (myMatured.length > 0) bindDice(myMatured);
     });
   }
 
-  // ===== 만기 도래 - 참가자가 직접 주사위 입력 =====
-  function renderMyMatured(matured) {
-    return `
-      <div class="card" style="border:2px solid var(--warning); background:var(--warning-bg);">
-        <div class="card-title">🎲 만기 도래! 주사위를 굴려주세요</div>
-        ${matured.map(inv => {
-          const product = getProductById(inv.productId);
-          return `
-            <div style="padding:12px 0; border-bottom:1px solid rgba(0,0,0,0.1);" data-matured-id="${inv.id}">
-              <div class="flex-between">
-                <div>
-                  <strong>${inv.productName}</strong>
-                  <span style="font-size:13px; color:var(--gray-600);"> | ${formatAmount(inv.amount)}만 원</span>
-                </div>
-                <span style="font-size:12px; color:var(--gray-500);">턴 ${inv.turn}→${inv.maturityTurn}</span>
-              </div>
-              <div class="mt-8" style="font-size:12px;">${product ? diceInfoHTML(product) : ''}</div>
-              <div class="mt-12">
-                <div class="dice-buttons">
-                  ${[1,2,3,4,5,6].map(d => {
-                    let style = '';
-                    if (product) {
-                      if (product.profitDice.includes(d)) style = 'style="color:var(--success)"';
-                      else if (product.lossDice.includes(d)) style = 'style="color:var(--danger)"';
-                      else if (product.preserveDice.includes(d)) style = 'style="color:var(--preserve)"';
-                    }
-                    return `<button class="dice-btn matured-dice" data-dice="${d}" data-inv-id="${inv.id}" ${style}>${d}</button>`;
-                  }).join('')}
-                </div>
-              </div>
-            </div>
-          `;
-        }).join('')}
-      </div>
-    `;
-  }
-
-  function bindMyMatured(matured) {
-    document.querySelectorAll('.matured-dice').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const invId = btn.dataset.invId;
-        const dice = parseInt(btn.dataset.dice);
-        const inv = matured.find(i => i.id === invId);
-        if (!inv) return;
-
-        const product = getProductById(inv.productId);
-        if (!product) return;
-
-        const result = judgeResult(product, dice);
-        const calc = calculateResult(inv.amount, product, result);
-
-        db.ref(`sessions/${sessionId}/investments/${invId}`).update({
-          diceValue: dice,
-          result,
-          profitAmount: calc.profitAmount,
-          lossAmount: calc.lossAmount,
-          preserveAmount: calc.preserveAmount,
-          settledAt: Date.now(),
-        }).then(() => {
-          showToast(`${inv.productName}: ${resultLabel(result)} (주사위 ${dice})`);
-        });
-      });
-    });
-  }
-
+  // ===== INVEST FORM =====
   function renderInvestForm() {
     return `
-      <div class="card">
-        <div class="card-title">투자할 상품을 선택하세요</div>
-        <div class="product-grid" id="productGrid">
+      <div class="bg-white rounded-2xl p-4 shadow-card">
+        <h2 class="font-bold text-[16px] text-on-surface mb-3">투자할 상품을 선택하세요</h2>
+        <div class="grid grid-cols-2 gap-3 mb-4" id="productGrid">
           ${PRODUCTS.map(p => `
-            <div class="product-card" data-id="${p.id}">
-              <div class="name">${p.name}</div>
-              <div class="meta">${p.description}</div>
-              <div class="rates">
-                <span class="rate-profit">수익 ${(p.profitRate * 100).toFixed(0)}%</span>
-                ${p.lossRate < 0 ? `<span class="rate-loss">손실 ${(p.lossRate * 100).toFixed(0)}%</span>` : ''}
-              </div>
-              <div class="dice-info mt-8">${diceInfoHTML(p)}</div>
-              <div class="meta mt-8">최소 ${formatAmount(p.minAmount)}만 원</div>
-            </div>
-          `).join('')}
-        </div>
-
-        <div id="amountSection" class="mt-16" style="display:none">
-          <div class="form-group">
-            <label class="form-label">투자 금액</label>
-            <div class="amount-input-wrapper">
-              <input type="tel" class="form-input" id="amountInput" placeholder="0" inputmode="numeric">
-              <span class="unit">만 원</span>
-            </div>
-            <div class="amount-min" id="amountMinText">최소 500만 원</div>
-          </div>
-          <button class="btn btn-primary btn-block btn-lg mt-12" id="submitInvestBtn">투자하기</button>
-        </div>
-      </div>
-
-      <div class="mt-12" style="text-align:center;">
-        <button class="btn btn-secondary" id="skipInvestBtn">이번 턴 투자 안 함</button>
-      </div>
-    `;
-  }
-
-  function renderWaiting() {
-    return '';
-  }
-
-  function renderSettling() {
-    return `
-      <div class="card" style="text-align:center; padding:30px 20px;">
-        <div style="font-size:32px; margin-bottom:8px;">🎲</div>
-        <div style="font-size:16px; font-weight:700;">결과 정산 중</div>
-        <div style="color:var(--gray-500); font-size:14px;">팀장이 주사위를 굴리고 있습니다.</div>
-      </div>
-    `;
-  }
-
-  function renderPortfolio(investments) {
-    if (investments.length === 0) return '';
-
-    const active = investments.filter(inv => inv.result === 'pending');
-    const settled = investments.filter(inv => inv.result && inv.result !== 'pending');
-    const totalProfit = settled.reduce((s, inv) => s + (inv.profitAmount || 0), 0);
-    const totalLoss = settled.reduce((s, inv) => s + (inv.lossAmount || 0), 0);
-    const netResult = totalProfit + totalLoss;
-
-    return `
-      <div class="stats-grid mt-16">
-        <div class="stat-card">
-          <div class="stat-value">${investments.length}</div>
-          <div class="stat-label">총 투자</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value" style="color:var(--warning)">${active.length}</div>
-          <div class="stat-label">진행중</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value amount-positive">+${formatAmount(totalProfit)}</div>
-          <div class="stat-label">총 수익</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value amount-negative">${formatAmount(totalLoss)}</div>
-          <div class="stat-label">총 손실</div>
-        </div>
-      </div>
-
-      ${active.length > 0 ? `
-        <div class="card mt-16">
-          <div class="card-title">📊 진행 중인 투자</div>
-          ${active.map(inv => `
-            <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--gray-100);">
+            <button class="product-card bg-white rounded-xl p-4 flex flex-col justify-between text-left h-[180px] shadow-card border-2 border-transparent" data-id="${p.id}">
               <div>
-                <strong>${inv.productName}</strong>
-                <div style="font-size:12px; color:var(--gray-500);">턴 ${inv.turn} → 턴 ${inv.maturityTurn} 만기</div>
+                <h3 class="font-bold text-[15px] text-on-surface leading-tight">${p.name}</h3>
+                <p class="text-[12px] text-on-surface-variant mt-1">${p.description}</p>
               </div>
-              <div style="text-align:right;">
-                <div style="font-weight:700;">${formatAmount(inv.amount)}만 원</div>
-                <div style="font-size:12px; color:var(--warning);">만기까지 ${Math.max(0, inv.maturityTurn - currentTurn)}턴</div>
+              <div>
+                <div class="flex flex-wrap gap-1 mb-2">
+                  <span class="bg-brand-green-light text-brand-green text-[11px] font-bold px-2 py-0.5 rounded-full">+${(p.profitRate*100).toFixed(0)}%</span>
+                  ${p.lossRate < 0 ? `<span class="bg-brand-red-light text-brand-red text-[11px] font-bold px-2 py-0.5 rounded-full">${(p.lossRate*100).toFixed(0)}%</span>` : ''}
+                </div>
+                <div class="text-[10px] text-on-surface-variant font-medium">
+                  성공 <span class="text-brand-green font-bold">${p.profitDice.join(',')}</span>
+                  ${p.preserveDice.length ? ` · 보존 <span class="text-brand-purple font-bold">${p.preserveDice.join(',')}</span>` : ''}
+                  ${p.lossDice.length ? ` · 실패 <span class="text-brand-red font-bold">${p.lossDice.join(',')}</span>` : ''}
+                </div>
+                <div class="text-[11px] text-outline mt-2 pt-2 border-t border-surface-variant">최소 ${formatAmount(p.minAmount)}만 원</div>
               </div>
-            </div>
+            </button>
           `).join('')}
         </div>
-      ` : ''}
 
-      ${settled.length > 0 ? `
-        <div class="card mt-16">
-          <div class="card-title">📋 완료된 투자</div>
-          <div class="table-wrapper">
-            <table>
-              <thead><tr><th>턴</th><th>상품</th><th class="text-right">금액</th><th class="text-center">결과</th><th class="text-right">수익/손실</th></tr></thead>
-              <tbody>
-                ${settled.map(inv => {
-                  const net = (inv.profitAmount || 0) + (inv.lossAmount || 0);
-                  const display = inv.result === 'preserve' ? formatAmount(inv.preserveAmount) :
-                    `${net >= 0 ? '+' : ''}${formatAmount(net)}`;
-                  const cls = inv.result === 'success' ? 'amount-positive' : inv.result === 'fail' ? 'amount-negative' : '';
-                  return `<tr><td>${inv.turn}</td><td>${inv.productName}</td><td class="text-right">${formatAmount(inv.amount)}</td><td class="text-center">${resultBadge(inv.result)}</td><td class="text-right ${cls}">${display}</td></tr>`;
-                }).join('')}
-              </tbody>
-            </table>
+        <div id="amountSection" class="hidden">
+          <div class="bg-white rounded-xl p-5 shadow-card border border-outline-variant/30 mb-4">
+            <label class="block text-[13px] font-medium text-on-surface-variant mb-2">투자 금액</label>
+            <div class="flex items-center justify-end border-b-2 border-brand-blue pb-2 mb-2">
+              <input type="tel" id="amountInput" class="text-right text-[28px] font-bold text-on-surface border-none bg-transparent focus:ring-0 p-0 w-full" placeholder="0" inputmode="numeric">
+              <span class="text-[14px] font-medium text-on-surface-variant ml-2 whitespace-nowrap">만 원</span>
+            </div>
+            <p class="text-[12px] text-brand-gray-text text-right" id="amountMinText">최소 500만 원</p>
           </div>
-          <div style="margin-top:12px; padding-top:12px; border-top:1px solid var(--gray-200); display:flex; justify-content:space-between;">
-            <span style="font-weight:600;">순수익</span>
-            <span class="${netResult >= 0 ? 'amount-positive' : 'amount-negative'}" style="font-size:18px; font-weight:700;">${netResult >= 0 ? '+' : ''}${formatAmount(netResult)}만 원</span>
+          <div class="flex flex-col gap-3">
+            <button id="submitInvestBtn" class="w-full bg-brand-blue text-white h-[52px] rounded-xl font-bold text-[16px] active:scale-[0.98] transition-transform">투자하기</button>
+            <button id="skipInvestBtn" class="w-full bg-brand-gray-light text-brand-gray-dark h-[44px] rounded-xl font-medium text-[15px] active:scale-[0.98] transition-transform">이번 턴 투자 안 함</button>
           </div>
         </div>
-      ` : ''}
+        <div id="skipOnlySection" class="mt-3">
+          <button id="skipInvestBtn2" class="w-full bg-brand-gray-light text-brand-gray-dark h-[44px] rounded-xl font-medium text-[15px] active:scale-[0.98] transition-transform">이번 턴 투자 안 함</button>
+        </div>
+      </div>
     `;
   }
 
@@ -397,59 +253,194 @@ const PlayerApp = (() => {
       document.querySelectorAll('.product-card').forEach(c => c.classList.remove('selected'));
       card.classList.add('selected');
       selectedProduct = getProductById(card.dataset.id);
-      document.getElementById('amountSection').style.display = 'block';
+      document.getElementById('amountSection').classList.remove('hidden');
+      document.getElementById('skipOnlySection').classList.add('hidden');
       document.getElementById('amountMinText').textContent = `최소 ${formatAmount(selectedProduct.minAmount)}만 원`;
       document.getElementById('amountInput').focus();
     });
 
     const amountInput = document.getElementById('amountInput');
-    amountInput.addEventListener('input', e => {
-      const raw = e.target.value.replace(/[^0-9]/g, '');
-      e.target.value = raw ? parseInt(raw).toLocaleString('ko-KR') : '';
-    });
-
-    document.getElementById('submitInvestBtn').addEventListener('click', () => {
-      if (!selectedProduct) { showToast('상품을 선택해 주세요'); return; }
-      const raw = amountInput.value.replace(/[^0-9]/g, '');
-      const amount = parseInt(raw) || 0;
-      if (amount < selectedProduct.minAmount) {
-        showToast(`최소 ${formatAmount(selectedProduct.minAmount)}만 원 이상 입력해 주세요`);
-        return;
-      }
-
-      const investment = {
-        playerId, playerName, teamId: playerTeam,
-        turn: currentTurn,
-        productId: selectedProduct.id,
-        productName: selectedProduct.name,
-        amount,
-        profitRate: selectedProduct.profitRate,
-        lossRate: selectedProduct.lossRate,
-        maturityTurn: currentTurn + MATURITY_TURNS,
-        status: 'active',
-        result: 'pending',
-        profitAmount: 0, lossAmount: 0, preserveAmount: 0,
-        createdAt: Date.now(),
-      };
-
-      db.ref(`sessions/${sessionId}/investments`).push(investment).then(() => {
-        showToast('투자 완료!');
-      }).catch(() => showToast('저장 실패. 다시 시도해 주세요'));
-    });
-
-    // 투자 안 함
-    const skipBtn = document.getElementById('skipInvestBtn');
-    if (skipBtn) {
-      skipBtn.addEventListener('click', () => {
-        db.ref(`sessions/${sessionId}/skips/${currentTurn}_${playerId}`).set({
-          playerId, playerName, teamId: playerTeam,
-          turn: currentTurn,
-          createdAt: Date.now(),
-        }).then(() => {
-          showToast('이번 턴은 투자하지 않습니다');
-        });
+    if (amountInput) {
+      amountInput.addEventListener('input', e => {
+        const raw = e.target.value.replace(/[^0-9]/g, '');
+        e.target.value = raw ? parseInt(raw).toLocaleString('ko-KR') : '';
       });
     }
+
+    const submitBtn = document.getElementById('submitInvestBtn');
+    if (submitBtn) {
+      submitBtn.addEventListener('click', () => {
+        if (!selectedProduct) { showToast('상품을 선택해 주세요'); return; }
+        const raw = amountInput.value.replace(/[^0-9]/g, '');
+        const amount = parseInt(raw) || 0;
+        if (amount < selectedProduct.minAmount) {
+          showToast(`최소 ${formatAmount(selectedProduct.minAmount)}만 원 이상`); return;
+        }
+        const investment = {
+          playerId, playerName, teamId: playerTeam, turn: currentTurn,
+          productId: selectedProduct.id, productName: selectedProduct.name, amount,
+          profitRate: selectedProduct.profitRate, lossRate: selectedProduct.lossRate,
+          maturityTurn: currentTurn + MATURITY_TURNS, status: 'active', result: 'pending',
+          profitAmount: 0, lossAmount: 0, preserveAmount: 0, createdAt: Date.now(),
+        };
+        db.ref(`sessions/${sessionId}/investments`).push(investment).then(() => showToast('투자 완료!'));
+      });
+    }
+
+    // Skip buttons
+    ['skipInvestBtn', 'skipInvestBtn2'].forEach(id => {
+      const btn = document.getElementById(id);
+      if (btn) {
+        btn.addEventListener('click', () => {
+          db.ref(`sessions/${sessionId}/skips/${currentTurn}_${playerId}`).set({
+            playerId, playerName, teamId: playerTeam, turn: currentTurn, createdAt: Date.now(),
+          }).then(() => showToast('이번 턴은 투자하지 않습니다'));
+        });
+      }
+    });
+  }
+
+  // ===== DICE SECTION =====
+  function renderDiceSection(matured) {
+    return `
+      <div class="bg-[#FFFBF5] rounded-2xl p-5 shadow-card border-l-4 border-brand-orange space-y-4">
+        <h2 class="font-bold text-[16px] text-on-surface flex items-center gap-2">
+          <span class="text-[20px]">🎲</span> 만기 도래! 주사위를 굴려주세요
+        </h2>
+        ${matured.map((inv, idx) => {
+          const product = getProductById(inv.productId);
+          return `
+            ${idx > 0 ? '<hr class="border-outline-variant/30">' : ''}
+            <div class="space-y-3" data-matured-id="${inv.id}">
+              <div class="flex justify-between items-center">
+                <div class="flex items-center gap-2">
+                  <span class="font-bold text-[15px]">${inv.productName}</span>
+                  <span class="bg-surface-variant text-on-surface-variant px-2 py-0.5 rounded-md text-[11px]">턴${inv.turn}→${inv.maturityTurn}</span>
+                </div>
+                <span class="font-bold text-[15px]">${formatAmount(inv.amount)}만 원</span>
+              </div>
+              <div class="flex gap-3 text-[12px] font-medium">
+                <span class="text-brand-green">성공 ${product.profitDice.join(',')}</span>
+                ${product.preserveDice.length ? `<span class="text-brand-purple">보존 ${product.preserveDice.join(',')}</span>` : ''}
+                ${product.lossDice.length ? `<span class="text-brand-red">실패 ${product.lossDice.join(',')}</span>` : ''}
+              </div>
+              <div class="flex justify-between">
+                ${[1,2,3,4,5,6].map(d => {
+                  let borderColor = '#E5E8EB', textColor = '#4E5968';
+                  if (product.profitDice.includes(d)) { borderColor = '#00C48C'; textColor = '#00C48C'; }
+                  else if (product.preserveDice.includes(d)) { borderColor = '#8B5CF6'; textColor = '#8B5CF6'; }
+                  else if (product.lossDice.includes(d)) { borderColor = '#FF4D4D'; textColor = '#FF4D4D'; }
+                  return `<button class="dice-btn w-[48px] h-[48px] rounded-xl bg-white font-bold text-lg flex items-center justify-center shadow-sm border-[1.5px]"
+                    style="border-color:${borderColor}; color:${textColor};"
+                    data-dice="${d}" data-inv-id="${inv.id}" data-color="${borderColor}">${d}</button>`;
+                }).join('')}
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+  }
+
+  function bindDice(matured) {
+    document.querySelectorAll('.dice-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const invId = btn.dataset.invId;
+        const dice = parseInt(btn.dataset.dice);
+        const inv = matured.find(i => i.id === invId);
+        if (!inv) return;
+        const product = getProductById(inv.productId);
+        if (!product) return;
+        const result = judgeResult(product, dice);
+        const calc = calculateResult(inv.amount, product, result);
+        db.ref(`sessions/${sessionId}/investments/${invId}`).update({
+          diceValue: dice, result,
+          profitAmount: calc.profitAmount, lossAmount: calc.lossAmount, preserveAmount: calc.preserveAmount,
+          settledAt: Date.now(),
+        }).then(() => showToast(`${inv.productName}: ${resultLabel(result)} (주사위 ${dice})`));
+      });
+    });
+  }
+
+  // ===== STATS =====
+  function renderStats(total, activeCount, totalProfit, totalLoss) {
+    if (total === 0) return '';
+    return `
+      <div class="grid grid-cols-2 gap-3">
+        <div class="bg-white rounded-2xl p-5 flex flex-col items-center justify-center shadow-card">
+          <div class="text-[32px] font-bold text-on-surface">${total}</div>
+          <div class="text-brand-gray-text text-xs mt-1">총 투자</div>
+        </div>
+        <div class="bg-white rounded-2xl p-5 flex flex-col items-center justify-center shadow-card">
+          <div class="text-[32px] font-bold text-brand-orange">${activeCount}</div>
+          <div class="text-brand-gray-text text-xs mt-1">진행중</div>
+        </div>
+        <div class="bg-white rounded-2xl p-5 flex flex-col items-center justify-center shadow-card">
+          <div class="text-[24px] font-bold text-brand-green">+${formatAmount(totalProfit)}</div>
+          <div class="text-brand-gray-text text-xs mt-1">총 수익</div>
+        </div>
+        <div class="bg-white rounded-2xl p-5 flex flex-col items-center justify-center shadow-card">
+          <div class="text-[24px] font-bold text-brand-red">${formatAmount(totalLoss)}</div>
+          <div class="text-brand-gray-text text-xs mt-1">총 손실</div>
+        </div>
+      </div>
+    `;
+  }
+
+  // ===== ACTIVE INVESTMENTS =====
+  function renderActiveInvestments(active) {
+    return `
+      <div class="bg-white rounded-2xl p-5 shadow-card">
+        <h2 class="font-bold text-[16px] text-on-surface mb-4">📊 진행 중인 투자</h2>
+        <div class="space-y-4">
+          ${active.map((inv, idx) => `
+            <div class="flex justify-between items-center ${idx < active.length - 1 ? 'pb-4 border-b border-brand-gray-light' : ''}">
+              <div>
+                <div class="font-bold text-[15px] text-on-surface">${inv.productName}</div>
+                <div class="text-brand-gray-text text-[12px] mt-0.5">턴 ${inv.turn} → 턴 ${inv.maturityTurn} 만기</div>
+              </div>
+              <div class="text-right">
+                <div class="font-bold text-[15px] text-on-surface">${formatAmount(inv.amount)}만 원</div>
+                <div class="text-brand-orange text-[12px] mt-0.5">만기까지 ${Math.max(0, inv.maturityTurn - currentTurn)}턴</div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  // ===== SETTLED INVESTMENTS =====
+  function renderSettledInvestments(settled, netResult) {
+    return `
+      <div class="bg-white rounded-2xl p-5 shadow-card">
+        <h2 class="font-bold text-[16px] text-on-surface mb-4">📋 완료된 투자</h2>
+        <div class="grid grid-cols-[1fr_2fr_1fr_1fr_1.5fr] gap-2 pb-2 text-[11px] text-brand-gray-text font-medium border-b border-brand-gray-light">
+          <div>턴</div><div>상품</div><div class="text-right">금액</div><div class="text-center">결과</div><div class="text-right">수익/손실</div>
+        </div>
+        <div class="space-y-3 pt-3">
+          ${settled.map(inv => {
+            const net = (inv.profitAmount || 0) + (inv.lossAmount || 0);
+            const display = inv.result === 'preserve' ? formatAmount(inv.preserveAmount) : `${net >= 0 ? '+' : ''}${formatAmount(net)}`;
+            const colorCls = inv.result === 'success' ? 'text-brand-green' : inv.result === 'fail' ? 'text-brand-red' : 'text-brand-purple';
+            const badgeBg = inv.result === 'success' ? 'bg-brand-green-light text-brand-green' : inv.result === 'fail' ? 'bg-brand-red-light text-brand-red' : 'bg-brand-purple-light text-brand-purple';
+            return `
+              <div class="grid grid-cols-[1fr_2fr_1fr_1fr_1.5fr] gap-2 items-center text-[13px] border-b border-brand-gray-light pb-3">
+                <div class="text-on-surface-variant">턴${inv.turn}</div>
+                <div class="font-medium text-on-surface">${inv.productName}</div>
+                <div class="text-right font-medium">${formatAmount(inv.amount)}</div>
+                <div class="flex justify-center"><span class="${badgeBg} px-2 py-0.5 rounded-full text-[10px] font-bold">${resultLabel(inv.result)}</span></div>
+                <div class="text-right font-bold ${colorCls}">${display}</div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+        <div class="mt-4 pt-4 border-t border-brand-gray-light flex justify-between items-center">
+          <div class="font-bold text-[15px] text-on-surface">순수익</div>
+          <div class="font-bold text-[20px] ${netResult >= 0 ? 'text-brand-green' : 'text-brand-red'}">${netResult >= 0 ? '+' : ''}${formatAmount(netResult)}만 원</div>
+        </div>
+      </div>
+    `;
   }
 
   document.addEventListener('DOMContentLoaded', init);
