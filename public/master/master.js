@@ -364,8 +364,43 @@ const MasterApp = (() => {
           }).join('')}
         </div>
 
-        <!-- 선택된 종목별 주사위 영역 -->
-        <div id="worldEventDiceArea" class="space-y-4"></div>
+        <!-- 통합 주사위 영역 -->
+        <div id="worldEventDiceArea" class="hidden">
+          <div class="bg-white rounded-2xl p-8 border border-outline-variant text-center">
+            <h3 class="font-bold text-[16px] mb-2">대표 주사위</h3>
+            <p class="text-brand-gray-text text-[13px] mb-6">선택한 모든 종목에 동일하게 적용됩니다</p>
+            
+            <div class="flex justify-center mb-6">
+              <div id="diceDisplay" class="w-[100px] h-[100px] rounded-2xl bg-surface-container flex items-center justify-center text-[48px] font-bold text-on-surface transition-transform shadow-inner" style="display:none;">?</div>
+            </div>
+
+            <button id="rollDiceBtn" class="h-[56px] px-8 bg-brand-orange text-white rounded-xl font-bold text-[18px] hover:bg-orange-600 active:scale-[0.95] transition-all mx-auto flex items-center gap-3">
+              🎲 주사위 굴리기
+            </button>
+
+            <div id="diceResultPreview" class="mt-6 hidden">
+              <div id="diceResultText" class="text-[20px] font-bold"></div>
+              <div id="diceAffectedList" class="mt-4 text-left text-[13px] text-brand-gray-text space-y-1"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 또는 직접 선택 -->
+        <div id="worldEventManualDice" class="hidden">
+          <div class="bg-white rounded-2xl p-6 border border-outline-variant">
+            <div class="flex justify-between items-center mb-4">
+              <h3 class="font-bold text-[16px]">직접 지정</h3>
+              <button id="switchToRollBtn" class="text-brand-blue text-[13px] font-medium">← 굴리기로 돌아가기</button>
+            </div>
+            <div class="flex justify-center gap-3" id="manualDiceButtons">
+              ${[1,2,3,4,5,6].map(d => `<button class="manual-dice w-[56px] h-[56px] rounded-xl bg-surface-container border-2 border-outline-variant text-[22px] font-bold hover:border-brand-blue hover:scale-105 transition-all" data-dice="${d}">${d}</button>`).join('')}
+            </div>
+          </div>
+        </div>
+
+        <div class="text-center mt-2">
+          <button id="switchToManualBtn" class="text-brand-gray-text text-[12px] underline hidden">숫자 직접 지정하기</button>
+        </div>
 
         <!-- 발동 버튼 -->
         <div class="mt-6">
@@ -418,106 +453,100 @@ const MasterApp = (() => {
     });
 
     let selectedProducts = {};
-    let diceResults = {};
+    let finalDice = null;
 
-    // 종목 체크박스 변경 시 주사위 영역 업데이트
+    // 종목 체크박스
     document.querySelectorAll('.world-event-product').forEach(cb => {
       cb.addEventListener('change', () => {
-        const pid = cb.dataset.productId;
-        if (cb.checked) {
-          selectedProducts[pid] = true;
-        } else {
-          delete selectedProducts[pid];
-          delete diceResults[pid];
-        }
-        updateDiceArea();
-        updateConfirmBtn();
+        if (cb.checked) selectedProducts[cb.dataset.productId] = true;
+        else delete selectedProducts[cb.dataset.productId];
+        
+        const hasSelection = Object.keys(selectedProducts).length > 0;
+        document.getElementById('worldEventDiceArea').classList.toggle('hidden', !hasSelection);
+        document.getElementById('switchToManualBtn').classList.toggle('hidden', !hasSelection);
+        document.getElementById('worldEventConfirmBtn').disabled = true;
+        finalDice = null;
+        document.getElementById('diceDisplay').style.display = 'none';
+        document.getElementById('diceResultPreview').classList.add('hidden');
       });
     });
 
-    function updateDiceArea() {
-      const area = document.getElementById('worldEventDiceArea');
-      const pids = Object.keys(selectedProducts);
-      if (pids.length === 0) {
-        area.innerHTML = '';
-        return;
-      }
+    // 주사위 굴리기 버튼
+    document.getElementById('rollDiceBtn')?.addEventListener('click', () => {
+      const display = document.getElementById('diceDisplay');
+      const btn = document.getElementById('rollDiceBtn');
+      display.style.display = 'flex';
+      btn.disabled = true;
+      btn.textContent = '굴리는 중...';
 
-      area.innerHTML = pids.map(pid => {
+      rollDiceWithAnimation(display, (value) => {
+        finalDice = value;
+        btn.disabled = false;
+        btn.innerHTML = '🎲 다시 굴리기';
+        showDiceResult(value);
+        document.getElementById('worldEventConfirmBtn').disabled = false;
+      });
+    });
+
+    // 직접 지정 전환
+    document.getElementById('switchToManualBtn')?.addEventListener('click', () => {
+      document.getElementById('worldEventDiceArea').classList.add('hidden');
+      document.getElementById('worldEventManualDice').classList.remove('hidden');
+      document.getElementById('switchToManualBtn').classList.add('hidden');
+    });
+
+    document.getElementById('switchToRollBtn')?.addEventListener('click', () => {
+      document.getElementById('worldEventDiceArea').classList.remove('hidden');
+      document.getElementById('worldEventManualDice').classList.add('hidden');
+      document.getElementById('switchToManualBtn').classList.remove('hidden');
+    });
+
+    // 직접 지정 버튼
+    document.querySelectorAll('.manual-dice').forEach(btn => {
+      btn.addEventListener('click', () => {
+        finalDice = parseInt(btn.dataset.dice);
+        document.querySelectorAll('.manual-dice').forEach(b => {
+          b.classList.remove('border-brand-blue', 'bg-brand-blue', 'text-white');
+          b.classList.add('border-outline-variant');
+        });
+        btn.classList.remove('border-outline-variant');
+        btn.classList.add('border-brand-blue', 'bg-brand-blue', 'text-white');
+        
+        const display = document.getElementById('diceDisplay');
+        display.style.display = 'flex';
+        display.textContent = finalDice;
+
+        showDiceResult(finalDice);
+        document.getElementById('worldEventConfirmBtn').disabled = false;
+      });
+    });
+
+    function showDiceResult(dice) {
+      const preview = document.getElementById('diceResultPreview');
+      const text = document.getElementById('diceResultText');
+      const list = document.getElementById('diceAffectedList');
+      preview.classList.remove('hidden');
+
+      const pids = Object.keys(selectedProducts);
+      let totalAffected = 0;
+      let lines = [];
+
+      pids.forEach(pid => {
         const product = getProductById(pid);
-        return `
-          <div class="p-4 rounded-xl border border-outline-variant bg-white">
-            <div class="flex justify-between items-center mb-3">
-              <span class="font-bold text-[15px]">${product?.name || pid}</span>
-              <span class="text-brand-gray-text text-[13px]">${byProduct[pid]?.length || 0}명 대상</span>
-            </div>
-            <div class="flex items-center gap-4">
-              <div class="flex gap-2">
-                ${[1,2,3,4,5,6].map(d => {
-                  let cls = '';
-                  if (product?.profitDice.includes(d)) cls = 'dice-success';
-                  else if (product?.preserveDice.includes(d)) cls = 'dice-preserve';
-                  else if (product?.lossDice.includes(d)) cls = 'dice-fail';
-                  const selected = diceResults[pid] === d;
-                  const selectedStyle = selected ? 'ring-2 ring-offset-2 ring-brand-blue bg-brand-blue text-white !border-brand-blue' : '';
-                  return `<button class="dice-btn ${cls} ${selectedStyle} world-dice" data-product-id="${pid}" data-dice="${d}">${d}</button>`;
-                }).join('')}
-              </div>
-              <button class="roll-dice-btn h-[48px] px-4 bg-brand-orange text-white rounded-xl font-bold text-[14px] hover:bg-orange-600 transition-colors flex items-center gap-2 shrink-0" data-product-id="${pid}">
-                🎲 굴리기
-              </button>
-            </div>
-            <div class="flex items-center gap-3 mt-3">
-              <div class="dice-roll-display w-[56px] h-[56px] rounded-xl bg-surface-container flex items-center justify-center text-[28px] font-bold text-on-surface transition-transform" data-product-id="${pid}" style="display:none;"></div>
-              ${diceResults[pid] ? (() => {
-                const result = judgeResult(product, diceResults[pid]);
-                const colorCls = result === 'success' ? 'text-brand-green' : result === 'fail' ? 'text-brand-red' : 'text-brand-purple';
-                return `<span class="font-bold text-[16px] ${colorCls}">주사위 ${diceResults[pid]} → ${resultLabel(result)}</span>`;
-              })() : ''}
-            </div>
-          </div>
-        `;
-      }).join('');
-
-      // 주사위 직접 선택 이벤트
-      area.querySelectorAll('.world-dice').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const pid = btn.dataset.productId;
-          diceResults[pid] = parseInt(btn.dataset.dice);
-          updateDiceArea();
-          updateConfirmBtn();
-        });
+        const result = judgeResult(product, dice);
+        const count = (byProduct[pid] || []).length;
+        totalAffected += count;
+        const colorCls = result === 'success' ? 'text-brand-green' : result === 'fail' ? 'text-brand-red' : 'text-brand-purple';
+        lines.push(`<div><span class="font-bold">${product.name}</span> → <span class="${colorCls} font-bold">${resultLabel(result)}</span> (${count}명)</div>`);
       });
 
-      // 랜덤 굴리기 버튼 이벤트
-      area.querySelectorAll('.roll-dice-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const pid = btn.dataset.productId;
-          const displayEl = area.querySelector(`.dice-roll-display[data-product-id="${pid}"]`);
-          displayEl.style.display = 'flex';
-          btn.disabled = true;
-          btn.textContent = '굴리는 중...';
-
-          rollDiceWithAnimation(displayEl, (finalValue) => {
-            diceResults[pid] = finalValue;
-            btn.disabled = false;
-            btn.innerHTML = '🎲 굴리기';
-            updateDiceArea();
-            updateConfirmBtn();
-          });
-        });
-      });
-    }
-
-    function updateConfirmBtn() {
-      const btn = document.getElementById('worldEventConfirmBtn');
-      const pids = Object.keys(selectedProducts);
-      const allHaveDice = pids.length > 0 && pids.every(pid => diceResults[pid]);
-      btn.disabled = !allHaveDice;
+      text.innerHTML = `주사위 <span class="text-brand-blue text-[28px]">${dice}</span> · ${totalAffected}명 즉시 정산`;
+      list.innerHTML = lines.join('');
     }
 
     // 발동 버튼
     document.getElementById('worldEventConfirmBtn')?.addEventListener('click', () => {
+      if (!finalDice) return;
       const pids = Object.keys(selectedProducts);
       if (pids.length === 0) return;
 
@@ -527,16 +556,14 @@ const MasterApp = (() => {
       const updates = {};
 
       pids.forEach(pid => {
-        const dice = diceResults[pid];
-        if (!dice) return;
         const product = getProductById(pid);
         if (!product) return;
-        const result = judgeResult(product, dice);
+        const result = judgeResult(product, finalDice);
         const targets = byProduct[pid] || [];
 
         targets.forEach(inv => {
           const calc = calculateResult(inv.amount, product, result);
-          updates[`sessions/${sessionId}/investments/${inv.id}/diceValue`] = dice;
+          updates[`sessions/${sessionId}/investments/${inv.id}/diceValue`] = finalDice;
           updates[`sessions/${sessionId}/investments/${inv.id}/result`] = result;
           updates[`sessions/${sessionId}/investments/${inv.id}/profitAmount`] = calc.profitAmount;
           updates[`sessions/${sessionId}/investments/${inv.id}/lossAmount`] = calc.lossAmount;
@@ -546,21 +573,18 @@ const MasterApp = (() => {
           affectedCount++;
         });
 
-        eventResults.push({ productId: pid, productName: product.name, dice, result });
+        eventResults.push({ productId: pid, productName: product.name, dice: finalDice, result });
       });
 
-      // 이벤트 기록 저장
       const eventKey = db.ref(`sessions/${sessionId}/worldEvents`).push().key;
       updates[`sessions/${sessionId}/worldEvents/${eventKey}`] = {
-        turn: state.currentTurn,
+        turn: state.currentTurn, dice: finalDice,
         productNames: eventResults.map(r => r.productName),
-        results: eventResults,
-        affectedCount,
-        createdAt: Date.now(),
+        results: eventResults, affectedCount, createdAt: Date.now(),
       };
 
       db.ref().update(updates).then(() => {
-        showToast(`⚡ 월드 이벤트 발동! ${affectedCount}건 즉시 정산`);
+        showToast(`⚡ 월드 이벤트 발동! 주사위 ${finalDice} · ${affectedCount}건 정산`);
         currentTab = 'worldevent';
       });
     });
