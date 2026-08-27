@@ -192,6 +192,7 @@ const PlayerApp = (() => {
 
       if (phase === 'investing') bindInvestForm();
       if (myMatured.length > 0) bindDice(myMatured);
+      if (settled.length > 0) bindShareResult();
     });
   }
 
@@ -465,8 +466,130 @@ const PlayerApp = (() => {
           <div class="font-bold text-[15px] text-on-surface">순수익</div>
           <div class="font-bold text-[20px] ${netResult >= 0 ? 'text-brand-green' : 'text-brand-red'}">${netResult >= 0 ? '+' : ''}${formatAmount(netResult)}만 원</div>
         </div>
+        <div class="mt-4 pt-4 border-t border-brand-gray-light">
+          <button id="shareResultBtn" class="w-full h-[44px] bg-brand-blue/10 text-brand-blue rounded-xl font-bold text-[14px] active:scale-[0.98] transition-transform">📊 내 결과 공유하기</button>
+        </div>
       </div>
     `;
+  }
+
+  // ===== 조별 순위 + 결과 공유 =====
+  function renderTeamRanking() {
+    // 전체 참가자 데이터 가져와서 조별 순위 표시
+    return new Promise(resolve => {
+      db.ref(`sessions/${sessionId}`).once('value').then(snap => {
+        const data = snap.val() || {};
+        const players = data.players || {};
+        const investments = data.investments || {};
+        const teams = data.teams || {};
+
+        const playerArr = Object.entries(players).map(([id, p]) => ({ id, ...p }));
+        const investArr = Object.entries(investments).map(([id, inv]) => ({ id, ...inv }));
+        const teamArr = Object.entries(teams).map(([id, t]) => ({ id, ...t }));
+
+        // 내 팀 찾기
+        const myTeam = teamArr.find(t => t.id === playerTeam);
+        const myTeamMembers = playerArr.filter(p => p.teamId === playerTeam);
+
+        // 팀원별 순수익 계산
+        const memberStats = myTeamMembers.map(p => {
+          const pInv = investArr.filter(i => i.playerId === p.id && i.result && i.result !== 'pending');
+          const net = pInv.reduce((s, i) => s + (i.profitAmount || 0) + (i.lossAmount || 0), 0);
+          const totalInvested = investArr.filter(i => i.playerId === p.id).reduce((s, i) => s + (i.amount || 0), 0);
+          return { ...p, netProfit: net, investCount: investArr.filter(i => i.playerId === p.id).length, totalInvested };
+        }).sort((a, b) => b.netProfit - a.netProfit);
+
+        // 내 순위
+        const myRank = memberStats.findIndex(m => m.id === playerId) + 1;
+        const myStats = memberStats.find(m => m.id === playerId) || { netProfit: 0, investCount: 0, totalInvested: 0 };
+
+        resolve(`
+          <div class="bg-white rounded-2xl p-5 shadow-card mt-4">
+            <h2 class="font-bold text-[16px] text-on-surface mb-4">🏅 ${myTeam?.name || '우리 팀'} 순위</h2>
+            
+            <div class="bg-brand-blue/5 rounded-xl p-4 mb-4 text-center">
+              <div class="text-brand-gray-text text-[12px]">내 순위</div>
+              <div class="text-[28px] font-bold text-brand-blue">${myRank}위</div>
+              <div class="text-[13px] text-brand-gray-text">${myTeamMembers.length}명 중</div>
+            </div>
+
+            <div class="space-y-2">
+              ${memberStats.map((m, idx) => {
+                const isMe = m.id === playerId;
+                const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}`;
+                return `
+                  <div class="flex items-center justify-between p-3 rounded-lg ${isMe ? 'bg-brand-blue/10 border border-brand-blue/30' : 'bg-surface-container-low'}">
+                    <div class="flex items-center gap-3">
+                      <span class="text-[14px] w-6 text-center">${medal}</span>
+                      <span class="font-medium text-[14px] ${isMe ? 'text-brand-blue font-bold' : ''}">${m.name}${isMe ? ' (나)' : ''}</span>
+                    </div>
+                    <span class="font-bold text-[14px] ${m.netProfit >= 0 ? 'text-brand-green' : 'text-brand-red'}">${m.netProfit >= 0 ? '+' : ''}${formatAmount(m.netProfit)}</span>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        `);
+      });
+    });
+  }
+
+  function bindShareResult() {
+    document.getElementById('shareResultBtn')?.addEventListener('click', async () => {
+      // 팀 순위 가져와서 모달로 표시
+      const rankingHtml = await renderTeamRanking();
+      
+      // 공유 가능한 결과 카드 생성
+      const shareCard = document.createElement('div');
+      shareCard.innerHTML = `
+        <div style="position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:9998; display:flex; align-items:center; justify-content:center; padding:16px;" id="shareModal">
+          <div style="background:white; border-radius:16px; padding:24px; max-width:360px; width:100%; max-height:90vh; overflow-y:auto;">
+            <div class="text-center mb-4">
+              <h2 class="font-bold text-[18px]">📊 나의 투자 성적표</h2>
+              <p class="text-brand-gray-text text-[13px] mt-1">${playerName} · My Life 투자 보드게임</p>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-3 mb-4">
+              <div class="bg-brand-green-light rounded-xl p-3 text-center">
+                <div class="text-[20px] font-bold text-brand-green" id="shareProfit"></div>
+                <div class="text-[11px] text-brand-gray-text">총 수익</div>
+              </div>
+              <div class="bg-brand-red-light rounded-xl p-3 text-center">
+                <div class="text-[20px] font-bold text-brand-red" id="shareLoss"></div>
+                <div class="text-[11px] text-brand-gray-text">총 손실</div>
+              </div>
+            </div>
+
+            ${rankingHtml}
+
+            <div class="mt-6 space-y-3">
+              <button id="copyShareLink" class="w-full h-[44px] bg-brand-blue text-white rounded-xl font-bold text-[14px] active:scale-[0.98] transition-transform">🔗 링크 복사</button>
+              <button id="closeShareModal" class="w-full h-[40px] bg-brand-gray-light text-brand-gray-dark rounded-xl font-medium text-[14px]">닫기</button>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(shareCard);
+
+      // 수치 채우기
+      db.ref(`sessions/${sessionId}/investments`).orderByChild('playerId').equalTo(playerId).once('value').then(snap => {
+        const invs = [];
+        snap.forEach(c => invs.push(c.val()));
+        const settled = invs.filter(i => i.result && i.result !== 'pending');
+        const profit = settled.reduce((s, i) => s + (i.profitAmount || 0), 0);
+        const loss = settled.reduce((s, i) => s + (i.lossAmount || 0), 0);
+        const profitEl = document.getElementById('shareProfit');
+        const lossEl = document.getElementById('shareLoss');
+        if (profitEl) profitEl.textContent = '+' + formatAmount(profit);
+        if (lossEl) lossEl.textContent = formatAmount(loss);
+      });
+
+      document.getElementById('closeShareModal')?.addEventListener('click', () => shareCard.remove());
+      document.getElementById('copyShareLink')?.addEventListener('click', () => {
+        const url = `${window.location.origin}/player/?session=${sessionId}`;
+        navigator.clipboard.writeText(`${playerName}의 My Life 투자 성적표 🎲\n${url}`).then(() => showToast('링크 복사됨!'));
+      });
+    });
   }
 
   document.addEventListener('DOMContentLoaded', init);

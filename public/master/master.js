@@ -140,7 +140,15 @@ const MasterApp = (() => {
           <div class="nav-item ${currentTab === 'ranking' ? 'active' : ''}" data-tab="ranking">
             <span class="material-symbols-outlined">leaderboard</span> 최종 산출
           </div>
-          <div class="mt-auto pt-4">
+          <div class="mt-auto pt-4 space-y-3">
+            <div class="flex items-center justify-between px-2">
+              <span class="text-[12px] text-brand-gray-text">자동 턴 넘기기</span>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="autoTurnToggle" class="sr-only peer" ${sessionData?.state?.autoTurn ? 'checked' : ''}>
+                <div class="w-9 h-5 bg-brand-gray-light rounded-full peer peer-checked:bg-brand-blue transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
+              </label>
+            </div>
+            <div id="autoTurnCountdown" class="text-center text-[12px] text-brand-orange font-bold hidden"></div>
             ${state.phase === 'investing' ?
               `<button id="nextTurnBtn" class="w-full h-[44px] ${allDone ? 'bg-brand-blue text-white' : 'bg-brand-gray-light text-brand-gray-text cursor-not-allowed'} rounded-xl font-bold text-[14px] transition-colors" ${!allDone ? 'disabled' : ''}>다음 턴 →</button>` :
               `<button id="finishSettleBtn" class="w-full h-[44px] bg-brand-green text-white rounded-xl font-bold text-[14px]">정산 완료 → 투자 재개</button>`
@@ -171,6 +179,23 @@ const MasterApp = (() => {
     if (nextBtn) nextBtn.addEventListener('click', nextTurn);
     const finishBtn = document.getElementById('finishSettleBtn');
     if (finishBtn) finishBtn.addEventListener('click', finishSettle);
+
+    // 자동 턴 넘기기 토글
+    const autoToggle = document.getElementById('autoTurnToggle');
+    if (autoToggle) {
+      autoToggle.addEventListener('change', () => {
+        db.ref(`sessions/${sessionId}/state/autoTurn`).set(autoToggle.checked);
+        if (autoToggle.checked && allDone && state.phase === 'investing') {
+          startAutoTurnCountdown();
+        } else {
+          stopAutoTurnCountdown();
+        }
+      });
+      // 이미 켜져 있고 전원 완료면 카운트다운 시작
+      if (autoToggle.checked && allDone && state.phase === 'investing') {
+        startAutoTurnCountdown();
+      }
+    }
 
     // Render tab
     const container = document.getElementById('tabContent');
@@ -912,6 +937,37 @@ const MasterApp = (() => {
   }
 
   // ===== TURN MANAGEMENT =====
+  let autoTurnTimer = null;
+  let autoTurnSeconds = 10;
+
+  function startAutoTurnCountdown() {
+    stopAutoTurnCountdown();
+    autoTurnSeconds = 10;
+    const el = document.getElementById('autoTurnCountdown');
+    if (el) {
+      el.classList.remove('hidden');
+      el.textContent = `${autoTurnSeconds}초 후 다음 턴`;
+    }
+    autoTurnTimer = setInterval(() => {
+      autoTurnSeconds--;
+      const el = document.getElementById('autoTurnCountdown');
+      if (el) el.textContent = `${autoTurnSeconds}초 후 다음 턴`;
+      if (autoTurnSeconds <= 0) {
+        stopAutoTurnCountdown();
+        nextTurn();
+      }
+    }, 1000);
+  }
+
+  function stopAutoTurnCountdown() {
+    if (autoTurnTimer) {
+      clearInterval(autoTurnTimer);
+      autoTurnTimer = null;
+    }
+    const el = document.getElementById('autoTurnCountdown');
+    if (el) el.classList.add('hidden');
+  }
+
   function nextTurn() {
     const state = sessionData.state || {};
     const newTurn = (state.currentTurn || 1) + 1;
