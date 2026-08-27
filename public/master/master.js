@@ -128,6 +128,9 @@ const MasterApp = (() => {
             <span class="material-symbols-outlined">payments</span> 만기 정산
             ${pendingMaturity.length > 0 ? `<span class="ml-auto bg-brand-orange text-white text-[11px] font-bold px-2 py-0.5 rounded-full">${pendingMaturity.length}</span>` : ''}
           </div>
+          <div class="nav-item ${currentTab === 'worldevent' ? 'active' : ''}" data-tab="worldevent">
+            <span class="material-symbols-outlined">bolt</span> 월드 이벤트
+          </div>
           <div class="nav-item ${currentTab === 'all' ? 'active' : ''}" data-tab="all">
             <span class="material-symbols-outlined">history</span> 전체 내역
           </div>
@@ -177,6 +180,7 @@ const MasterApp = (() => {
     switch (currentTab) {
       case 'dashboard': container.innerHTML = renderDashboard(state, teamArr, playerArr, investArr, thisTurnDone, pendingMaturity); bindDashboardEvents(state, playerArr, teamArr); break;
       case 'maturity': container.innerHTML = renderMaturity(state, investArr); bindMaturityEvents(investArr); break;
+      case 'worldevent': container.innerHTML = renderWorldEvent(investArr); bindWorldEventEvents(investArr); break;
       case 'all': container.innerHTML = renderAllRecords(investArr); break;
       case 'teams': container.innerHTML = renderTeams(teamArr, playerArr); bindTeamEvents(); break;
       case 'ranking': container.innerHTML = renderRanking(teamArr, playerArr, investArr); break;
@@ -308,6 +312,231 @@ const MasterApp = (() => {
       maturityTurn: turn + MATURITY_TURNS, status: 'active', result: 'pending',
       profitAmount: 0, lossAmount: 0, preserveAmount: 0, proxy: true, createdAt: Date.now(),
     }).then(() => showToast(`${playerName}: ${product.name} ${formatAmount(amount)}만 원 대리 투자`));
+  }
+
+  // ===== WORLD EVENT =====
+  function renderWorldEvent(investments) {
+    const pending = investments.filter(i => i.result === 'pending');
+    // 종목별로 진행 중인 투자 그룹화
+    const byProduct = {};
+    pending.forEach(inv => {
+      if (!byProduct[inv.productId]) byProduct[inv.productId] = [];
+      byProduct[inv.productId].push(inv);
+    });
+
+    const productIds = Object.keys(byProduct);
+
+    if (productIds.length === 0) {
+      return `<div class="bento-card text-center py-12 text-brand-gray-text">진행 중인 투자가 없어 월드 이벤트를 발동할 수 없습니다.</div>`;
+    }
+
+    return `
+      <div class="bento-card mb-6">
+        <div class="flex items-center gap-3 mb-2">
+          <span class="text-[24px]">⚡</span>
+          <h2 class="font-bold text-[20px]">월드 이벤트</h2>
+        </div>
+        <p class="text-brand-gray-text text-[14px] mb-6">이벤트 대상 종목을 선택하고, 대표 주사위를 굴려주세요.<br>해당 종목에 투자 중인 모든 참가자가 즉시 정산됩니다.</p>
+
+        <!-- 종목 선택 -->
+        <div class="space-y-3 mb-6">
+          ${productIds.map(pid => {
+            const product = getProductById(pid);
+            const invList = byProduct[pid];
+            return `
+              <label class="flex items-center justify-between p-4 rounded-xl border border-outline-variant bg-white cursor-pointer hover:border-brand-blue transition-colors has-[:checked]:border-brand-blue has-[:checked]:bg-brand-blue-light">
+                <div class="flex items-center gap-3">
+                  <input type="checkbox" class="world-event-product w-5 h-5 rounded border-outline-variant text-brand-blue focus:ring-brand-blue" data-product-id="${pid}">
+                  <div>
+                    <span class="font-bold text-[15px]">${product?.name || pid}</span>
+                    <span class="text-brand-gray-text text-[13px] ml-2">${invList.length}명 투자 중</span>
+                  </div>
+                </div>
+                <div class="flex gap-2 text-[11px] font-medium">
+                  ${product ? `
+                    <span class="chip-success px-2 py-0.5 rounded-md">성공 ${product.profitDice.join(',')}</span>
+                    ${product.preserveDice.length ? `<span class="chip-preserve px-2 py-0.5 rounded-md">보존 ${product.preserveDice.join(',')}</span>` : ''}
+                    ${product.lossDice.length ? `<span class="chip-fail px-2 py-0.5 rounded-md">실패 ${product.lossDice.join(',')}</span>` : ''}
+                  ` : ''}
+                </div>
+              </label>
+            `;
+          }).join('')}
+        </div>
+
+        <!-- 선택된 종목별 주사위 영역 -->
+        <div id="worldEventDiceArea" class="space-y-4"></div>
+
+        <!-- 발동 버튼 -->
+        <div class="mt-6">
+          <button id="worldEventConfirmBtn" class="w-full h-[52px] bg-brand-red text-white rounded-xl font-bold text-[16px] active:scale-[0.98] transition-transform disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+            ⚡ 월드 이벤트 발동
+          </button>
+          <p class="text-brand-gray-text text-[12px] mt-2 text-center">발동하면 선택한 종목의 모든 진행 중 투자가 즉시 정산됩니다.</p>
+        </div>
+      </div>
+
+      <!-- 이벤트 히스토리 -->
+      ${renderWorldEventHistory()}
+    `;
+  }
+
+  function renderWorldEventHistory() {
+    const events = sessionData.worldEvents ? Object.values(sessionData.worldEvents) : [];
+    if (events.length === 0) return '';
+    const sorted = events.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+    return `
+      <div class="bento-card">
+        <h3 class="font-bold text-[16px] mb-4">📋 이벤트 히스토리</h3>
+        <div class="space-y-3">
+          ${sorted.map(ev => `
+            <div class="p-3 rounded-lg bg-surface-container-low">
+              <div class="flex justify-between items-center">
+                <div>
+                  <span class="font-bold text-[14px]">⚡ ${ev.productNames?.join(', ') || ''}</span>
+                  <span class="text-brand-gray-text text-[12px] ml-2">턴 ${ev.turn}</span>
+                </div>
+                <span class="text-brand-gray-text text-[12px]">${ev.affectedCount || 0}명 정산</span>
+              </div>
+              <div class="text-[12px] text-brand-gray-text mt-1">
+                ${ev.results ? ev.results.map(r => `${r.productName}: 주사위 ${r.dice} → ${resultLabel(r.result)}`).join(' | ') : ''}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  function bindWorldEventEvents(investments) {
+    const pending = investments.filter(i => i.result === 'pending');
+    const byProduct = {};
+    pending.forEach(inv => {
+      if (!byProduct[inv.productId]) byProduct[inv.productId] = [];
+      byProduct[inv.productId].push(inv);
+    });
+
+    let selectedProducts = {};
+    let diceResults = {};
+
+    // 종목 체크박스 변경 시 주사위 영역 업데이트
+    document.querySelectorAll('.world-event-product').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const pid = cb.dataset.productId;
+        if (cb.checked) {
+          selectedProducts[pid] = true;
+        } else {
+          delete selectedProducts[pid];
+          delete diceResults[pid];
+        }
+        updateDiceArea();
+        updateConfirmBtn();
+      });
+    });
+
+    function updateDiceArea() {
+      const area = document.getElementById('worldEventDiceArea');
+      const pids = Object.keys(selectedProducts);
+      if (pids.length === 0) {
+        area.innerHTML = '';
+        return;
+      }
+
+      area.innerHTML = pids.map(pid => {
+        const product = getProductById(pid);
+        return `
+          <div class="p-4 rounded-xl border border-outline-variant bg-white">
+            <div class="flex justify-between items-center mb-3">
+              <span class="font-bold text-[15px]">${product?.name || pid}</span>
+              <span class="text-brand-gray-text text-[13px]">${byProduct[pid]?.length || 0}명 대상</span>
+            </div>
+            <div class="flex gap-2">
+              ${[1,2,3,4,5,6].map(d => {
+                let cls = '';
+                if (product?.profitDice.includes(d)) cls = 'dice-success';
+                else if (product?.preserveDice.includes(d)) cls = 'dice-preserve';
+                else if (product?.lossDice.includes(d)) cls = 'dice-fail';
+                const selected = diceResults[pid] === d;
+                const selectedStyle = selected ? 'ring-2 ring-offset-2 ring-brand-blue bg-brand-blue text-white !border-brand-blue' : '';
+                return `<button class="dice-btn ${cls} ${selectedStyle} world-dice" data-product-id="${pid}" data-dice="${d}">${d}</button>`;
+              }).join('')}
+            </div>
+            ${diceResults[pid] ? (() => {
+              const result = judgeResult(product, diceResults[pid]);
+              const colorCls = result === 'success' ? 'text-brand-green' : result === 'fail' ? 'text-brand-red' : 'text-brand-purple';
+              return `<div class="mt-3 font-bold ${colorCls}">→ ${resultLabel(result)}</div>`;
+            })() : ''}
+          </div>
+        `;
+      }).join('');
+
+      // 주사위 버튼 이벤트 재바인딩
+      area.querySelectorAll('.world-dice').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const pid = btn.dataset.productId;
+          diceResults[pid] = parseInt(btn.dataset.dice);
+          updateDiceArea();
+          updateConfirmBtn();
+        });
+      });
+    }
+
+    function updateConfirmBtn() {
+      const btn = document.getElementById('worldEventConfirmBtn');
+      const pids = Object.keys(selectedProducts);
+      const allHaveDice = pids.length > 0 && pids.every(pid => diceResults[pid]);
+      btn.disabled = !allHaveDice;
+    }
+
+    // 발동 버튼
+    document.getElementById('worldEventConfirmBtn')?.addEventListener('click', () => {
+      const pids = Object.keys(selectedProducts);
+      if (pids.length === 0) return;
+
+      const state = sessionData.state || {};
+      let affectedCount = 0;
+      const eventResults = [];
+      const updates = {};
+
+      pids.forEach(pid => {
+        const dice = diceResults[pid];
+        if (!dice) return;
+        const product = getProductById(pid);
+        if (!product) return;
+        const result = judgeResult(product, dice);
+        const targets = byProduct[pid] || [];
+
+        targets.forEach(inv => {
+          const calc = calculateResult(inv.amount, product, result);
+          updates[`sessions/${sessionId}/investments/${inv.id}/diceValue`] = dice;
+          updates[`sessions/${sessionId}/investments/${inv.id}/result`] = result;
+          updates[`sessions/${sessionId}/investments/${inv.id}/profitAmount`] = calc.profitAmount;
+          updates[`sessions/${sessionId}/investments/${inv.id}/lossAmount`] = calc.lossAmount;
+          updates[`sessions/${sessionId}/investments/${inv.id}/preserveAmount`] = calc.preserveAmount;
+          updates[`sessions/${sessionId}/investments/${inv.id}/settledAt`] = Date.now();
+          updates[`sessions/${sessionId}/investments/${inv.id}/settledBy`] = 'worldEvent';
+          affectedCount++;
+        });
+
+        eventResults.push({ productId: pid, productName: product.name, dice, result });
+      });
+
+      // 이벤트 기록 저장
+      const eventKey = db.ref(`sessions/${sessionId}/worldEvents`).push().key;
+      updates[`sessions/${sessionId}/worldEvents/${eventKey}`] = {
+        turn: state.currentTurn,
+        productNames: eventResults.map(r => r.productName),
+        results: eventResults,
+        affectedCount,
+        createdAt: Date.now(),
+      };
+
+      db.ref().update(updates).then(() => {
+        showToast(`⚡ 월드 이벤트 발동! ${affectedCount}건 즉시 정산`);
+        currentTab = 'worldevent';
+      });
+    });
   }
 
   // ===== MATURITY =====
