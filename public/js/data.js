@@ -149,37 +149,12 @@ function animateDice(container, finalValue, callback) {
   const totalFrames = 18;
   container.style.transition = 'transform 0.08s';
 
-  // 사운드: Web Audio API로 딸깍 소리
-  let audioCtx;
-  try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
-
-  function playTick(freq, vol) {
-    if (!audioCtx) return;
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.frequency.value = freq;
-    osc.type = 'square';
-    gain.gain.value = vol;
-    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
-    osc.start();
-    osc.stop(audioCtx.currentTime + 0.05);
-  }
-
-  function playFinal() {
-    if (!audioCtx) return;
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.frequency.value = 600;
-    osc.type = 'sine';
-    gain.gain.value = 0.3;
-    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
-    osc.start();
-    osc.stop(audioCtx.currentTime + 0.2);
-  }
+  // 실제 주사위 굴리기 사운드 재생
+  const basePath = window.location.pathname.includes('/player/') ? '../' :
+                   window.location.pathname.includes('/master/') ? '../' : '';
+  const diceAudio = new Audio(basePath + 'dice-roll.mp3');
+  diceAudio.volume = 0.7;
+  diceAudio.play().catch(() => {}); // 자동재생 차단 시 무시
 
   // 배경 펄스 효과
   container.parentElement?.classList.add('dice-rolling');
@@ -196,18 +171,11 @@ function animateDice(container, finalValue, callback) {
     const scale = 1 + (Math.random() * 0.3) * (1 - progress);
     container.style.transform = `scale(${scale}) rotate(${rotation}deg)`;
 
-    // 소리 (빈도 줄어들며)
-    if (count % (progress > 0.7 ? 2 : 1) === 0) {
-      playTick(300 + Math.random() * 200, 0.1 * (1 - progress));
-    }
-
     if (count >= totalFrames) {
       clearInterval(interval);
       container.textContent = finalValue;
       container.style.transform = 'scale(1.4)';
       container.style.transition = 'transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)';
-
-      playFinal();
 
       // 결과 팡 효과
       addBurstEffect(container);
@@ -222,7 +190,7 @@ function animateDice(container, finalValue, callback) {
         }, 200);
       }, 400);
     }
-  }, 70 + (count * 3)); // 점점 느려짐
+  }, 70 + (count * 3));
 }
 
 // 팡 터지는 파티클 효과
