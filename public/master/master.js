@@ -58,7 +58,7 @@ const MasterApp = (() => {
     sessionId = code;
     db.ref(`sessions/${code}`).set({
       name, code, createdAt: Date.now(),
-      state: { currentTurn: 1, phase: 'investing' },
+      state: { currentTurn: 1, phase: 'investing', maxTurns: 20, gameEnded: false },
     }).then(() => {
       localStorage.setItem('mylife_master_session', sessionId);
       showToast(`세션 생성: ${code}`);
@@ -148,11 +148,21 @@ const MasterApp = (() => {
                 <div class="w-9 h-5 bg-brand-gray-light rounded-full peer peer-checked:bg-brand-blue transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
               </label>
             </div>
+            <div class="flex items-center justify-between px-2">
+              <span class="text-[12px] text-brand-gray-text">최대 턴</span>
+              <input type="number" id="maxTurnsInput" value="${state.maxTurns || 20}" min="1" max="100" class="w-[60px] h-[28px] text-center text-[13px] font-bold border border-outline-variant rounded-lg focus:border-brand-blue outline-none">
+            </div>
             <div id="autoTurnCountdown" class="text-center text-[12px] text-brand-orange font-bold hidden"></div>
-            ${state.phase === 'investing' ?
-              `<button id="nextTurnBtn" class="w-full h-[44px] ${allDone ? 'bg-brand-blue text-white' : 'bg-brand-gray-light text-brand-gray-text cursor-not-allowed'} rounded-xl font-bold text-[14px] transition-colors" ${!allDone ? 'disabled' : ''}>다음 턴 →</button>` :
-              `<button id="finishSettleBtn" class="w-full h-[44px] bg-brand-green text-white rounded-xl font-bold text-[14px]">정산 완료 → 투자 재개</button>`
-            }
+            ${state.gameEnded ? `
+              <div class="text-center text-[13px] text-brand-red font-bold py-2">🏁 게임 종료됨</div>
+            ` : state.phase === 'investing' ? `
+              ${state.currentTurn >= (state.maxTurns || 20) ?
+                `<button id="endGameBtn" class="w-full h-[44px] bg-brand-red text-white rounded-xl font-bold text-[14px] transition-colors">🏁 게임 종료</button>` :
+                `<button id="nextTurnBtn" class="w-full h-[44px] ${allDone ? 'bg-brand-blue text-white' : 'bg-brand-gray-light text-brand-gray-text cursor-not-allowed'} rounded-xl font-bold text-[14px] transition-colors" ${!allDone ? 'disabled' : ''}>다음 턴 →</button>`
+              }
+            ` : `
+              <button id="finishSettleBtn" class="w-full h-[44px] bg-brand-green text-white rounded-xl font-bold text-[14px]">정산 완료 → 투자 재개</button>
+            `}
           </div>
         </aside>
 
@@ -179,20 +189,31 @@ const MasterApp = (() => {
     if (nextBtn) nextBtn.addEventListener('click', nextTurn);
     const finishBtn = document.getElementById('finishSettleBtn');
     if (finishBtn) finishBtn.addEventListener('click', finishSettle);
+    const endGameBtn = document.getElementById('endGameBtn');
+    if (endGameBtn) endGameBtn.addEventListener('click', endGame);
+
+    // 최대 턴 수 변경
+    const maxTurnsInput = document.getElementById('maxTurnsInput');
+    if (maxTurnsInput) {
+      maxTurnsInput.addEventListener('change', () => {
+        const val = parseInt(maxTurnsInput.value) || 20;
+        db.ref(`sessions/${sessionId}/state/maxTurns`).set(val);
+        showToast(`최대 턴: ${val}`);
+      });
+    }
 
     // 자동 턴 넘기기 토글
     const autoToggle = document.getElementById('autoTurnToggle');
     if (autoToggle) {
       autoToggle.addEventListener('change', () => {
         db.ref(`sessions/${sessionId}/state/autoTurn`).set(autoToggle.checked);
-        if (autoToggle.checked && allDone && state.phase === 'investing') {
+        if (autoToggle.checked && allDone && state.phase === 'investing' && state.currentTurn < (state.maxTurns || 20)) {
           startAutoTurnCountdown();
         } else {
           stopAutoTurnCountdown();
         }
       });
-      // 이미 켜져 있고 전원 완료면 카운트다운 시작
-      if (autoToggle.checked && allDone && state.phase === 'investing') {
+      if (autoToggle.checked && allDone && state.phase === 'investing' && state.currentTurn < (state.maxTurns || 20)) {
         startAutoTurnCountdown();
       }
     }
@@ -994,6 +1015,37 @@ const MasterApp = (() => {
     db.ref(`sessions/${sessionId}/state`).update({ phase: 'investing' }).then(() => {
       currentTab = 'dashboard';
       showToast('정산 완료. 투자 접수 재개');
+    });
+  }
+
+  function endGame() {
+    if (!confirm('게임을 종료하시겠습니까?\n미만기 투자는 중도해약 이율로 정산됩니다.')) return;
+
+    const investments = sessionData.investments || {};
+    const investArr = Object.entries(investments).map(([id, inv]) => ({ id, ...inv }));
+    const pending = investArr.filter(i => i.result === 'pending');
+    const updates = {};
+
+    // 미만기 투자 전부 중도해약 처리
+    pending.forEach(inv => {
+      const product = getProductById(inv.productId);
+      const earlyTermRate = product?.earlyTermRate || inv.profitRate || 0;
+      const calc = calculateResult(inv.amount, { ...product, earlyTermRate }, 'earlyTerm');
+      updates[`sessions/${sessionId}/investments/${inv.id}/result`] = 'earlyTerm';
+      updates[`sessions/${sessionId}/investments/${inv.id}/profitAmount`] = calc.profitAmount;
+      updates[`sessions/${sessionId}/investments/${inv.id}/lossAmount`] = 0;
+      updates[`sessions/${sessionId}/investments/${inv.id}/preserveAmount`] = 0;
+      updates[`sessions/${sessionId}/investments/${inv.id}/settledAt`] = Date.now();
+      updates[`sessions/${sessionId}/investments/${inv.id}/settledBy`] = 'gameEnd';
+    });
+
+    updates[`sessions/${sessionId}/state/gameEnded`] = true;
+    updates[`sessions/${sessionId}/state/phase`] = 'ended';
+    updates[`sessions/${sessionId}/state/endedAt`] = Date.now();
+
+    db.ref().update(updates).then(() => {
+      currentTab = 'ranking';
+      showToast(`🏁 게임 종료! ${pending.length}건 중도해약 정산 완료`);
     });
   }
 

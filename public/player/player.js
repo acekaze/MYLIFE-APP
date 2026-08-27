@@ -164,6 +164,7 @@ const PlayerApp = (() => {
       const totalProfit = settled.reduce((s, i) => s + (i.profitAmount || 0), 0);
       const totalLoss = settled.reduce((s, i) => s + (i.lossAmount || 0), 0);
       const netResult = totalProfit + totalLoss;
+      const gameEnded = phase === 'ended';
 
       document.getElementById('app').innerHTML = `
         <div class="w-full max-w-[390px] mx-auto min-h-screen bg-background relative">
@@ -176,13 +177,14 @@ const PlayerApp = (() => {
           <!-- Status Strip -->
           <div class="bg-white h-[44px] flex items-center justify-between px-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
             <div class="bg-brand-blue text-white text-xs font-bold rounded-full px-3 py-1">턴 ${currentTurn}</div>
-            <span class="text-brand-gray-text text-sm font-medium">${phase === 'investing' ? '투자 접수 중' : '결과 정산 중'}</span>
+            <span class="text-brand-gray-text text-sm font-medium">${gameEnded ? '🏁 게임 종료' : phase === 'investing' ? '투자 접수 중' : '결과 정산 중'}</span>
           </div>
 
           <!-- Content -->
           <main class="p-4 pb-20 space-y-4">
-            ${myMatured.length > 0 ? renderDiceSection(myMatured) : ''}
-            ${phase === 'investing' ? renderInvestForm() : ''}
+            ${gameEnded ? renderGameEndedMessage() : ''}
+            ${!gameEnded && myMatured.length > 0 ? renderDiceSection(myMatured) : ''}
+            ${!gameEnded && phase === 'investing' ? renderInvestForm() : ''}
             ${renderStats(investments.length, active.length, totalProfit, totalLoss)}
             ${active.length > 0 ? renderActiveInvestments(active) : ''}
             ${settled.length > 0 ? renderSettledInvestments(settled, netResult) : ''}
@@ -190,10 +192,20 @@ const PlayerApp = (() => {
         </div>
       `;
 
-      if (phase === 'investing') bindInvestForm();
-      if (myMatured.length > 0) bindDice(myMatured);
+      if (!gameEnded && phase === 'investing') bindInvestForm();
+      if (!gameEnded && myMatured.length > 0) bindDice(myMatured);
       if (settled.length > 0) bindShareResult();
     });
+  }
+
+  function renderGameEndedMessage() {
+    return `
+      <div class="bg-white rounded-2xl p-6 shadow-card text-center">
+        <div class="text-[40px] mb-3">🏁</div>
+        <h2 class="font-bold text-[18px] mb-2">게임이 종료되었습니다</h2>
+        <p class="text-brand-gray-text text-[14px]">모든 투자가 정산되었습니다.<br>아래에서 최종 결과를 확인하세요.</p>
+      </div>
+    `;
   }
 
   // ===== INVEST FORM =====

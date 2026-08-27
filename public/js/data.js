@@ -73,6 +73,8 @@ function calculateResult(amount, product, result) {
       return { profitAmount: 0, lossAmount: Math.round(amount * product.lossRate), preserveAmount: 0 };
     case 'preserve':
       return { profitAmount: 0, lossAmount: 0, preserveAmount: amount };
+    case 'earlyTerm':
+      return { profitAmount: Math.round(amount * (product.earlyTermRate || 0)), lossAmount: 0, preserveAmount: 0 };
     default:
       return { profitAmount: 0, lossAmount: 0, preserveAmount: 0 };
   }
@@ -95,6 +97,7 @@ function resultLabel(result) {
     case 'success': return '성공';
     case 'fail': return '실패';
     case 'preserve': return '원금보존';
+    case 'earlyTerm': return '중도해약';
     case 'pending': return '진행중';
     default: return '';
   }
@@ -105,10 +108,15 @@ function resultBadge(result, settledBy) {
   const label = resultLabel(result);
   const cls = result === 'success' ? 'chip-success' :
               result === 'fail' ? 'chip-fail' :
-              result === 'preserve' ? 'chip-preserve' : 'bg-brand-orange-light text-brand-orange';
+              result === 'preserve' ? 'chip-preserve' :
+              result === 'earlyTerm' ? 'bg-brand-orange-light text-brand-orange' :
+              'bg-brand-orange-light text-brand-orange';
   let badge = `<span class="${cls} px-2 py-0.5 rounded-full text-[11px] font-bold">${label}</span>`;
   if (settledBy === 'worldEvent') {
     badge += `<span class="bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full text-[10px] font-bold ml-1">⚡이벤트</span>`;
+  }
+  if (settledBy === 'gameEnd') {
+    badge += `<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-[10px] font-bold ml-1">종료정산</span>`;
   }
   return badge;
 }
