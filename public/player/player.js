@@ -335,6 +335,10 @@ const PlayerApp = (() => {
                     data-dice="${d}" data-inv-id="${inv.id}" data-color="${borderColor}">${d}</button>`;
                 }).join('')}
               </div>
+              <button class="roll-random-btn w-full h-[44px] bg-brand-orange text-white rounded-xl font-bold text-[14px] active:scale-[0.98] transition-transform flex items-center justify-center gap-2" data-inv-id="${inv.id}">
+                🎲 주사위 굴리기
+              </button>
+              <div class="dice-roll-result w-[56px] h-[56px] rounded-xl bg-surface-container-high flex items-center justify-center text-[28px] font-bold mx-auto transition-transform" data-roll-inv-id="${inv.id}" style="display:none;"></div>
             </div>
           `;
         }).join('')}
@@ -347,19 +351,41 @@ const PlayerApp = (() => {
       btn.addEventListener('click', () => {
         const invId = btn.dataset.invId;
         const dice = parseInt(btn.dataset.dice);
-        const inv = matured.find(i => i.id === invId);
-        if (!inv) return;
-        const product = getProductById(inv.productId);
-        if (!product) return;
-        const result = judgeResult(product, dice);
-        const calc = calculateResult(inv.amount, product, result);
-        db.ref(`sessions/${sessionId}/investments/${invId}`).update({
-          diceValue: dice, result,
-          profitAmount: calc.profitAmount, lossAmount: calc.lossAmount, preserveAmount: calc.preserveAmount,
-          settledAt: Date.now(),
-        }).then(() => showToast(`${inv.productName}: ${resultLabel(result)} (주사위 ${dice})`));
+        submitDiceResult(invId, dice, matured);
       });
     });
+
+    // 랜덤 굴리기 버튼
+    document.querySelectorAll('.roll-random-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const invId = btn.dataset.invId;
+        const displayEl = document.querySelector(`.dice-roll-result[data-roll-inv-id="${invId}"]`);
+        displayEl.style.display = 'flex';
+        btn.disabled = true;
+        btn.textContent = '굴리는 중...';
+
+        rollDiceWithAnimation(displayEl, (finalValue) => {
+          btn.disabled = false;
+          btn.innerHTML = '🎲 주사위 굴리기';
+          // 잠시 후 자동 제출
+          setTimeout(() => submitDiceResult(invId, finalValue, matured), 500);
+        });
+      });
+    });
+  }
+
+  function submitDiceResult(invId, dice, matured) {
+    const inv = matured.find(i => i.id === invId);
+    if (!inv) return;
+    const product = getProductById(inv.productId);
+    if (!product) return;
+    const result = judgeResult(product, dice);
+    const calc = calculateResult(inv.amount, product, result);
+    db.ref(`sessions/${sessionId}/investments/${invId}`).update({
+      diceValue: dice, result,
+      profitAmount: calc.profitAmount, lossAmount: calc.lossAmount, preserveAmount: calc.preserveAmount,
+      settledAt: Date.now(),
+    }).then(() => showToast(`${inv.productName}: ${resultLabel(result)} (주사위 ${dice})`));
   }
 
   // ===== STATS =====
@@ -429,7 +455,7 @@ const PlayerApp = (() => {
                 <div class="text-on-surface-variant">턴${inv.turn}</div>
                 <div class="font-medium text-on-surface">${inv.productName}</div>
                 <div class="text-right font-medium">${formatAmount(inv.amount)}</div>
-                <div class="flex justify-center"><span class="${badgeBg} px-2 py-0.5 rounded-full text-[10px] font-bold">${resultLabel(inv.result)}</span></div>
+                <div class="flex justify-center"><span class="${badgeBg} px-2 py-0.5 rounded-full text-[10px] font-bold">${resultLabel(inv.result)}</span>${inv.settledBy === 'worldEvent' ? '<span class="bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full text-[9px] font-bold ml-1">⚡</span>' : ''}</div>
                 <div class="text-right font-bold ${colorCls}">${display}</div>
               </div>
             `;

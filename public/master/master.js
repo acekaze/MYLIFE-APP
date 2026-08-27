@@ -451,33 +451,60 @@ const MasterApp = (() => {
               <span class="font-bold text-[15px]">${product?.name || pid}</span>
               <span class="text-brand-gray-text text-[13px]">${byProduct[pid]?.length || 0}명 대상</span>
             </div>
-            <div class="flex gap-2">
-              ${[1,2,3,4,5,6].map(d => {
-                let cls = '';
-                if (product?.profitDice.includes(d)) cls = 'dice-success';
-                else if (product?.preserveDice.includes(d)) cls = 'dice-preserve';
-                else if (product?.lossDice.includes(d)) cls = 'dice-fail';
-                const selected = diceResults[pid] === d;
-                const selectedStyle = selected ? 'ring-2 ring-offset-2 ring-brand-blue bg-brand-blue text-white !border-brand-blue' : '';
-                return `<button class="dice-btn ${cls} ${selectedStyle} world-dice" data-product-id="${pid}" data-dice="${d}">${d}</button>`;
-              }).join('')}
+            <div class="flex items-center gap-4">
+              <div class="flex gap-2">
+                ${[1,2,3,4,5,6].map(d => {
+                  let cls = '';
+                  if (product?.profitDice.includes(d)) cls = 'dice-success';
+                  else if (product?.preserveDice.includes(d)) cls = 'dice-preserve';
+                  else if (product?.lossDice.includes(d)) cls = 'dice-fail';
+                  const selected = diceResults[pid] === d;
+                  const selectedStyle = selected ? 'ring-2 ring-offset-2 ring-brand-blue bg-brand-blue text-white !border-brand-blue' : '';
+                  return `<button class="dice-btn ${cls} ${selectedStyle} world-dice" data-product-id="${pid}" data-dice="${d}">${d}</button>`;
+                }).join('')}
+              </div>
+              <button class="roll-dice-btn h-[48px] px-4 bg-brand-orange text-white rounded-xl font-bold text-[14px] hover:bg-orange-600 transition-colors flex items-center gap-2 shrink-0" data-product-id="${pid}">
+                🎲 굴리기
+              </button>
             </div>
-            ${diceResults[pid] ? (() => {
-              const result = judgeResult(product, diceResults[pid]);
-              const colorCls = result === 'success' ? 'text-brand-green' : result === 'fail' ? 'text-brand-red' : 'text-brand-purple';
-              return `<div class="mt-3 font-bold ${colorCls}">→ ${resultLabel(result)}</div>`;
-            })() : ''}
+            <div class="flex items-center gap-3 mt-3">
+              <div class="dice-roll-display w-[56px] h-[56px] rounded-xl bg-surface-container flex items-center justify-center text-[28px] font-bold text-on-surface transition-transform" data-product-id="${pid}" style="display:none;"></div>
+              ${diceResults[pid] ? (() => {
+                const result = judgeResult(product, diceResults[pid]);
+                const colorCls = result === 'success' ? 'text-brand-green' : result === 'fail' ? 'text-brand-red' : 'text-brand-purple';
+                return `<span class="font-bold text-[16px] ${colorCls}">주사위 ${diceResults[pid]} → ${resultLabel(result)}</span>`;
+              })() : ''}
+            </div>
           </div>
         `;
       }).join('');
 
-      // 주사위 버튼 이벤트 재바인딩
+      // 주사위 직접 선택 이벤트
       area.querySelectorAll('.world-dice').forEach(btn => {
         btn.addEventListener('click', () => {
           const pid = btn.dataset.productId;
           diceResults[pid] = parseInt(btn.dataset.dice);
           updateDiceArea();
           updateConfirmBtn();
+        });
+      });
+
+      // 랜덤 굴리기 버튼 이벤트
+      area.querySelectorAll('.roll-dice-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const pid = btn.dataset.productId;
+          const displayEl = area.querySelector(`.dice-roll-display[data-product-id="${pid}"]`);
+          displayEl.style.display = 'flex';
+          btn.disabled = true;
+          btn.textContent = '굴리는 중...';
+
+          rollDiceWithAnimation(displayEl, (finalValue) => {
+            diceResults[pid] = finalValue;
+            btn.disabled = false;
+            btn.innerHTML = '🎲 굴리기';
+            updateDiceArea();
+            updateConfirmBtn();
+          });
         });
       });
     }
@@ -614,7 +641,7 @@ const MasterApp = (() => {
                     </div>
                   </div>
                   <div class="text-right">
-                    <div class="text-[12px] font-bold ${color}">${resultLabel(inv.result)}</div>
+                    <div class="text-[12px] font-bold ${color}">${resultLabel(inv.result)}${inv.settledBy === 'worldEvent' ? ' ⚡' : ''}</div>
                     <div class="font-bold ${color}">${display}</div>
                   </div>
                 </div>
@@ -675,7 +702,7 @@ const MasterApp = (() => {
                 return `<tr class="hover:bg-surface-container-low/50 text-[14px]">
                   <td class="p-3">${inv.turn}</td><td class="p-3 font-medium">${inv.playerName}</td><td class="p-3">${inv.productName}</td>
                   <td class="p-3 text-right">${formatAmount(inv.amount)}</td><td class="p-3 text-center text-brand-gray-text">턴${inv.maturityTurn}</td>
-                  <td class="p-3 text-center"><span class="${badgeCls} px-2 py-0.5 rounded-full text-[11px] font-bold">${resultLabel(inv.result)}</span></td>
+                  <td class="p-3 text-center"><span class="${badgeCls} px-2 py-0.5 rounded-full text-[11px] font-bold">${resultLabel(inv.result)}</span>${inv.settledBy === 'worldEvent' ? '<span class="bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full text-[9px] font-bold ml-1">⚡</span>' : ''}</td>
                   <td class="p-3 text-right font-bold ${color}">${display}</td>
                 </tr>`;
               }).join('')}

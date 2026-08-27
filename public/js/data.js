@@ -101,12 +101,16 @@ function resultLabel(result) {
 }
 
 // 결과 배지
-function resultBadge(result) {
+function resultBadge(result, settledBy) {
   const label = resultLabel(result);
-  const cls = result === 'success' ? 'badge-success' :
-              result === 'fail' ? 'badge-fail' :
-              result === 'preserve' ? 'badge-preserve' : 'badge-pending';
-  return `<span class="badge ${cls}">${label}</span>`;
+  const cls = result === 'success' ? 'chip-success' :
+              result === 'fail' ? 'chip-fail' :
+              result === 'preserve' ? 'chip-preserve' : 'bg-brand-orange-light text-brand-orange';
+  let badge = `<span class="${cls} px-2 py-0.5 rounded-full text-[11px] font-bold">${label}</span>`;
+  if (settledBy === 'worldEvent') {
+    badge += `<span class="bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full text-[10px] font-bold ml-1">⚡이벤트</span>`;
+  }
+  return badge;
 }
 
 // 주사위 판정 표시 HTML (상품 카드용)
@@ -135,5 +139,39 @@ function showToast(message, duration = 2000) {
   }
   toast.textContent = message;
   toast.classList.remove('hidden');
-  setTimeout(() => toast.classList.add('hidden'), duration);
+  toast.style.opacity = '1';
+  setTimeout(() => { toast.style.opacity = '0'; }, duration);
+}
+
+// 주사위 굴리기 애니메이션
+// container: 숫자가 표시될 DOM 요소
+// finalValue: 최종 주사위 값 (1~6)
+// callback: 애니메이션 완료 후 실행할 함수
+function animateDice(container, finalValue, callback) {
+  let count = 0;
+  const totalFrames = 15;
+  const interval = setInterval(() => {
+    count++;
+    const randomVal = Math.floor(Math.random() * 6) + 1;
+    container.textContent = randomVal;
+    container.style.transform = `scale(${1 + Math.random() * 0.2}) rotate(${Math.random() * 20 - 10}deg)`;
+
+    if (count >= totalFrames) {
+      clearInterval(interval);
+      container.textContent = finalValue;
+      container.style.transform = 'scale(1.2)';
+      setTimeout(() => {
+        container.style.transform = 'scale(1)';
+        if (callback) callback(finalValue);
+      }, 200);
+    }
+  }, 80);
+}
+
+// 주사위 랜덤 굴리기 (애니메이션 포함) - 버튼 엘리먼트에서 사용
+function rollDiceWithAnimation(displayEl, callback) {
+  const finalValue = Math.floor(Math.random() * 6) + 1;
+  displayEl.style.transition = 'transform 0.1s';
+  animateDice(displayEl, finalValue, callback);
+  return finalValue;
 }
