@@ -16,6 +16,14 @@
     .bento-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.10); }
     .dice-btn { width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; border-radius: 0.5rem; font-weight: 600; cursor: pointer; transition: all 0.2s; border: 2px solid transparent; background: #F5F6F8; }
     .dice-btn:hover { transform: scale(1.05); }
+    @keyframes dicePulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(49,130,246,0.3); }
+      50% { box-shadow: 0 0 0 12px rgba(49,130,246,0); }
+    }
+    .dice-rolling {
+      animation: dicePulse 0.6s ease-in-out infinite;
+      border-radius: 16px;
+    }
     .dice-success { border-color: #00C48C; color: #00C48C; }
     .dice-preserve { border-color: #8B5CF6; color: #8B5CF6; }
     .dice-fail { border-color: #FF4D4D; color: #FF4D4D; }

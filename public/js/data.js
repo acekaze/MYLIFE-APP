@@ -144,34 +144,127 @@ function showToast(message, duration = 2000) {
 }
 
 // 주사위 굴리기 애니메이션
-// container: 숫자가 표시될 DOM 요소
-// finalValue: 최종 주사위 값 (1~6)
-// callback: 애니메이션 완료 후 실행할 함수
 function animateDice(container, finalValue, callback) {
   let count = 0;
-  const totalFrames = 15;
+  const totalFrames = 18;
+  container.style.transition = 'transform 0.08s';
+
+  // 사운드: Web Audio API로 딸깍 소리
+  let audioCtx;
+  try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+
+  function playTick(freq, vol) {
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.frequency.value = freq;
+    osc.type = 'square';
+    gain.gain.value = vol;
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.05);
+  }
+
+  function playFinal() {
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.frequency.value = 600;
+    osc.type = 'sine';
+    gain.gain.value = 0.3;
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.2);
+  }
+
+  // 배경 펄스 효과
+  container.parentElement?.classList.add('dice-rolling');
+
   const interval = setInterval(() => {
     count++;
     const randomVal = Math.floor(Math.random() * 6) + 1;
     container.textContent = randomVal;
-    container.style.transform = `scale(${1 + Math.random() * 0.2}) rotate(${Math.random() * 20 - 10}deg)`;
+
+    // 속도 점점 느려지는 효과
+    const progress = count / totalFrames;
+    const shake = (1 - progress) * 15;
+    const rotation = (Math.random() - 0.5) * shake * 2;
+    const scale = 1 + (Math.random() * 0.3) * (1 - progress);
+    container.style.transform = `scale(${scale}) rotate(${rotation}deg)`;
+
+    // 소리 (빈도 줄어들며)
+    if (count % (progress > 0.7 ? 2 : 1) === 0) {
+      playTick(300 + Math.random() * 200, 0.1 * (1 - progress));
+    }
 
     if (count >= totalFrames) {
       clearInterval(interval);
       container.textContent = finalValue;
-      container.style.transform = 'scale(1.2)';
+      container.style.transform = 'scale(1.4)';
+      container.style.transition = 'transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)';
+
+      playFinal();
+
+      // 결과 팡 효과
+      addBurstEffect(container);
+
       setTimeout(() => {
-        container.style.transform = 'scale(1)';
-        if (callback) callback(finalValue);
-      }, 200);
+        container.style.transform = 'scale(1.1)';
+        container.parentElement?.classList.remove('dice-rolling');
+        setTimeout(() => {
+          container.style.transform = 'scale(1)';
+          container.style.transition = 'transform 0.08s';
+          if (callback) callback(finalValue);
+        }, 200);
+      }, 400);
     }
-  }, 80);
+  }, 70 + (count * 3)); // 점점 느려짐
 }
 
-// 주사위 랜덤 굴리기 (애니메이션 포함) - 버튼 엘리먼트에서 사용
+// 팡 터지는 파티클 효과
+function addBurstEffect(container) {
+  const rect = container.getBoundingClientRect();
+  const centerX = rect.left + rect.width / 2;
+  const centerY = rect.top + rect.height / 2;
+
+  const colors = ['#3182F6', '#00C48C', '#FF9F0A', '#FF4D4D', '#8B5CF6', '#FFD700'];
+  const particles = 12;
+
+  for (let i = 0; i < particles; i++) {
+    const particle = document.createElement('div');
+    const angle = (i / particles) * Math.PI * 2;
+    const distance = 40 + Math.random() * 30;
+    const size = 6 + Math.random() * 6;
+
+    particle.style.cssText = `
+      position: fixed; z-index: 99999;
+      width: ${size}px; height: ${size}px;
+      background: ${colors[i % colors.length]};
+      border-radius: 50%;
+      left: ${centerX}px; top: ${centerY}px;
+      pointer-events: none;
+      transition: all 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+      opacity: 1;
+    `;
+    document.body.appendChild(particle);
+
+    requestAnimationFrame(() => {
+      particle.style.transform = `translate(${Math.cos(angle) * distance}px, ${Math.sin(angle) * distance}px)`;
+      particle.style.opacity = '0';
+    });
+
+    setTimeout(() => particle.remove(), 700);
+  }
+}
+
+// 주사위 랜덤 굴리기 (애니메이션 포함)
 function rollDiceWithAnimation(displayEl, callback) {
   const finalValue = Math.floor(Math.random() * 6) + 1;
-  displayEl.style.transition = 'transform 0.1s';
+  displayEl.style.transition = 'transform 0.08s';
   animateDice(displayEl, finalValue, callback);
   return finalValue;
 }
