@@ -638,7 +638,15 @@ const MasterApp = (() => {
 
   // ===== MATURITY =====
   function renderMaturity(state, investments) {
-    const matured = investments.filter(i => i.maturityTurn <= state.currentTurn && i.result === 'pending');
+    const isFinalSettling = state.phase === 'finalSettling' || state.gameEnding;
+    
+    // 일반 만기 + 게임 종료 시 미만기 모두 포함
+    let matured;
+    if (isFinalSettling) {
+      matured = investments.filter(i => i.result === 'pending');
+    } else {
+      matured = investments.filter(i => i.maturityTurn <= state.currentTurn && i.result === 'pending');
+    }
     const recentlySettled = investments.filter(i => i.settledAt && i.result !== 'pending')
       .sort((a, b) => (b.settledAt || 0) - (a.settledAt || 0)).slice(0, 10);
 
@@ -646,10 +654,10 @@ const MasterApp = (() => {
       ${matured.length > 0 ? `
         <div class="bento-card mb-6">
           <div class="flex justify-between items-center mb-4">
-            <h2 class="font-bold text-[18px]">⏳ 정산 대기 ${matured.length}건</h2>
+            <h2 class="font-bold text-[18px]">${isFinalSettling ? '🏁 게임 종료 정산' : '⏳ 정산 대기'} ${matured.length}건</h2>
             <button id="settleAllBtn" class="h-[40px] px-5 bg-brand-green text-white rounded-xl font-bold text-[14px] hover:bg-green-600 transition-colors">전체 대리 정산</button>
           </div>
-          <p class="text-brand-gray-text text-[13px] mb-6">참가자가 직접 입력합니다. 필요 시 대리 정산 가능합니다.</p>
+          <p class="text-brand-gray-text text-[13px] mb-6">${isFinalSettling ? '미만기 투자입니다. 주사위를 굴려주세요. 성공=중도해약 이율 수익, 실패=손실률 절반, 보존=원금.' : '참가자가 직접 입력합니다. 필요 시 대리 정산 가능합니다.'}</p>
           <div class="space-y-3">
             ${matured.map(inv => {
               const product = getProductById(inv.productId);
@@ -743,11 +751,23 @@ const MasterApp = (() => {
     if (!inv) return;
     const product = getProductById(inv.productId);
     if (!product) return;
-    const result = judgeResult(product, diceValue);
-    const calc = calculateResult(inv.amount, product, result);
-    db.ref(`sessions/${sessionId}/investments/${invId}`).update({
-      diceValue, result, profitAmount: calc.profitAmount, lossAmount: calc.lossAmount, preserveAmount: calc.preserveAmount, settledAt: Date.now(),
-    }).then(() => showToast(`${inv.playerName}: ${resultLabel(result)} (주사위 ${diceValue})`));
+    const state = sessionData.state || {};
+    const isFinalSettling = state.phase === 'finalSettling' || state.gameEnding;
+    const isEarlyTerm = isFinalSettling && inv.maturityTurn > state.currentTurn;
+
+    if (isEarlyTerm) {
+      endGameFinalSettle(invId, diceValue, investments);
+    } else {
+      // 일반 만기 정산
+      const result = judgeResult(product, diceValue);
+      const calc = calculateResult(inv.amount, product, result);
+      db.ref(`sessions/${sessionId}/investments/${invId}`).update({
+        diceValue, result, profitAmount: calc.profitAmount, lossAmount: calc.lossAmount, preserveAmount: calc.preserveAmount, settledAt: Date.now(),
+      }).then(() => {
+        showToast(`${inv.playerName}: ${resultLabel(result)} (주사위 ${diceValue})`);
+        if (isFinalSettling) checkFinalSettleComplete();
+      });
+    }
   }
 
   // ===== ALL RECORDS =====
@@ -1019,34 +1039,63 @@ const MasterApp = (() => {
   }
 
   function endGame() {
-    if (!confirm('게임을 종료하시겠습니까?\n미만기 투자는 중도해약 이율로 정산됩니다.')) return;
+    if (!confirm('게임을 종료하시겠습니까?\n미만기 투자는 주사위를 굴려 중도해약 이율로 정산됩니다.')) return;
 
+    // 미만기 투자를 정산 대기 상태로 전환하고, 정산 phase로 변경
+    const state = sessionData.state || {};
+    db.ref(`sessions/${sessionId}/state`).update({
+      phase: 'finalSettling',
+      gameEnding: true,
+    }).then(() => {
+      currentTab = 'maturity';
+      showToast('🏁 게임 종료 정산을 시작합니다. 미만기 투자의 주사위를 굴려주세요.');
+    });
+  }
+
+  function endGameFinalSettle(invId, diceValue, investments) {
+    const inv = investments.find(i => i.id === invId);
+    if (!inv) return;
+    const product = getProductById(inv.productId);
+    if (!product) return;
+
+    const result = judgeResult(product, diceValue);
+    let calc;
+    if (result === 'success') {
+      // 중도해약 이율 적용
+      calc = { profitAmount: Math.round(inv.amount * product.earlyTermRate), lossAmount: 0, preserveAmount: 0 };
+    } else if (result === 'fail') {
+      // 원래 손실률의 절반 적용
+      calc = { profitAmount: 0, lossAmount: Math.round(inv.amount * (product.lossRate / 2)), preserveAmount: 0 };
+    } else {
+      calc = { profitAmount: 0, lossAmount: 0, preserveAmount: inv.amount };
+    }
+
+    db.ref(`sessions/${sessionId}/investments/${invId}`).update({
+      diceValue, result: result === 'success' ? 'earlyTerm' : result === 'fail' ? 'earlyTermFail' : 'preserve',
+      profitAmount: calc.profitAmount, lossAmount: calc.lossAmount, preserveAmount: calc.preserveAmount,
+      settledAt: Date.now(), settledBy: 'gameEnd',
+    }).then(() => {
+      const resultText = result === 'success' ? `중도해약 수익 +${formatAmount(calc.profitAmount)}` :
+                         result === 'fail' ? `중도해약 손실 ${formatAmount(calc.lossAmount)}` : '원금보존';
+      showToast(`${inv.playerName}: ${resultText} (주사위 ${diceValue})`);
+
+      // 모든 미만기 정산 완료됐는지 체크
+      checkFinalSettleComplete();
+    });
+  }
+
+  function checkFinalSettleComplete() {
     const investments = sessionData.investments || {};
     const investArr = Object.entries(investments).map(([id, inv]) => ({ id, ...inv }));
-    const pending = investArr.filter(i => i.result === 'pending');
-    const updates = {};
-
-    // 미만기 투자 전부 중도해약 처리
-    pending.forEach(inv => {
-      const product = getProductById(inv.productId);
-      const earlyTermRate = product?.earlyTermRate || inv.profitRate || 0;
-      const calc = calculateResult(inv.amount, { ...product, earlyTermRate }, 'earlyTerm');
-      updates[`sessions/${sessionId}/investments/${inv.id}/result`] = 'earlyTerm';
-      updates[`sessions/${sessionId}/investments/${inv.id}/profitAmount`] = calc.profitAmount;
-      updates[`sessions/${sessionId}/investments/${inv.id}/lossAmount`] = 0;
-      updates[`sessions/${sessionId}/investments/${inv.id}/preserveAmount`] = 0;
-      updates[`sessions/${sessionId}/investments/${inv.id}/settledAt`] = Date.now();
-      updates[`sessions/${sessionId}/investments/${inv.id}/settledBy`] = 'gameEnd';
-    });
-
-    updates[`sessions/${sessionId}/state/gameEnded`] = true;
-    updates[`sessions/${sessionId}/state/phase`] = 'ended';
-    updates[`sessions/${sessionId}/state/endedAt`] = Date.now();
-
-    db.ref().update(updates).then(() => {
-      currentTab = 'ranking';
-      showToast(`🏁 게임 종료! ${pending.length}건 중도해약 정산 완료`);
-    });
+    const remaining = investArr.filter(i => i.result === 'pending');
+    if (remaining.length === 0) {
+      db.ref(`sessions/${sessionId}/state`).update({
+        gameEnded: true, phase: 'ended', endedAt: Date.now(), gameEnding: false,
+      }).then(() => {
+        currentTab = 'ranking';
+        showToast('🏁 전체 정산 완료! 최종 산출을 확인하세요.');
+      });
+    }
   }
 
   document.addEventListener('DOMContentLoaded', init);

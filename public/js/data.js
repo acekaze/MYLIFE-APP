@@ -97,7 +97,8 @@ function resultLabel(result) {
     case 'success': return '성공';
     case 'fail': return '실패';
     case 'preserve': return '원금보존';
-    case 'earlyTerm': return '중도해약';
+    case 'earlyTerm': return '중도해약(수익)';
+    case 'earlyTermFail': return '중도해약(손실)';
     case 'pending': return '진행중';
     default: return '';
   }
@@ -110,6 +111,7 @@ function resultBadge(result, settledBy) {
               result === 'fail' ? 'chip-fail' :
               result === 'preserve' ? 'chip-preserve' :
               result === 'earlyTerm' ? 'bg-brand-orange-light text-brand-orange' :
+              result === 'earlyTermFail' ? 'bg-brand-red-light text-brand-red' :
               'bg-brand-orange-light text-brand-orange';
   let badge = `<span class="${cls} px-2 py-0.5 rounded-full text-[11px] font-bold">${label}</span>`;
   if (settledBy === 'worldEvent') {
