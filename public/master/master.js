@@ -169,20 +169,28 @@ const MasterApp = (() => {
 
             <!-- 세션 목록 -->
             <div class="bg-white rounded-2xl p-6 w-full shadow-card mb-4">
-              <h2 class="font-bold text-[16px] mb-3">${authRole === 'master' ? '전체 세션' : '내 세션'} (${sessions.length})</h2>
+              <div class="flex items-center justify-between mb-3">
+                <h2 class="font-bold text-[16px]">${authRole === 'master' ? '전체 세션' : '내 세션'} (${sessions.length})</h2>
+                ${sessions.some(s => s.state?.gameEnded) ? '<button id="cleanEndedBtn" class="text-brand-red text-[13px] font-medium hover:underline">종료 세션 정리</button>' : ''}
+              </div>
               ${sessions.length === 0 ? '<p class="text-brand-gray-text text-[14px] text-center py-6">세션이 없습니다</p>' : `
                 <div class="space-y-2">
                   ${sessions.map(s => `
-                    <button class="session-item w-full flex items-center justify-between p-4 rounded-xl border border-outline-variant hover:border-brand-blue transition-colors text-left" data-id="${s.id}">
-                      <div>
-                        <div class="font-bold text-[15px]">${s.name || '(이름 없음)'}</div>
-                        <div class="text-brand-gray-text text-[12px] mt-0.5">
-                          코드 ${s.id} · ${s.players ? Object.keys(s.players).length : 0}명 · 턴 ${s.state?.currentTurn || 1}
-                          ${s.state?.gameEnded ? ' · 🏁종료' : ''}
+                    <div class="flex items-center gap-2 p-4 rounded-xl border border-outline-variant hover:border-brand-blue transition-colors">
+                      <button class="session-item flex-1 flex items-center justify-between text-left" data-id="${s.id}">
+                        <div>
+                          <div class="font-bold text-[15px]">${s.name || '(이름 없음)'}</div>
+                          <div class="text-brand-gray-text text-[12px] mt-0.5">
+                            코드 ${s.id} · ${s.players ? Object.keys(s.players).length : 0}명 · 턴 ${s.state?.currentTurn || 1}
+                            ${s.state?.gameEnded ? ' · 🏁종료' : ''}
+                          </div>
                         </div>
-                      </div>
-                      <span class="material-symbols-outlined text-brand-gray-text">chevron_right</span>
-                    </button>
+                        <span class="material-symbols-outlined text-brand-gray-text">chevron_right</span>
+                      </button>
+                      <button class="delete-session shrink-0 text-brand-gray-text hover:text-brand-red transition-colors p-1" data-id="${s.id}" data-name="${s.name || '(이름 없음)'}" title="세션 삭제">
+                        <span class="material-symbols-outlined text-[20px]">delete</span>
+                      </button>
+                    </div>
                   `).join('')}
                 </div>
               `}
@@ -210,6 +218,36 @@ const MasterApp = (() => {
           enterSession();
         });
       });
+      document.querySelectorAll('.delete-session').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const id = btn.dataset.id;
+          const name = btn.dataset.name;
+          if (!confirm(`'${name}' 세션을 삭제하시겠습니까?\n참가자·투자 기록이 모두 사라지며 되돌릴 수 없습니다.`)) return;
+          db.ref(`sessions/${id}`).remove().then(() => {
+            if (localStorage.getItem('mylife_master_session') === id) {
+              localStorage.removeItem('mylife_master_session');
+            }
+            showToast(`'${name}' 삭제됨`);
+            renderSessionList();
+          });
+        });
+      });
+
+      // 종료된 세션 일괄 정리
+      const cleanBtn = document.getElementById('cleanEndedBtn');
+      if (cleanBtn) {
+        cleanBtn.addEventListener('click', () => {
+          const ended = sessions.filter(s => s.state?.gameEnded);
+          if (ended.length === 0) return;
+          if (!confirm(`종료된 세션 ${ended.length}개를 모두 삭제하시겠습니까?\n되돌릴 수 없습니다.`)) return;
+          const updates = {};
+          ended.forEach(s => { updates[`sessions/${s.id}`] = null; });
+          db.ref().update(updates).then(() => {
+            showToast(`종료 세션 ${ended.length}개 정리됨`);
+            renderSessionList();
+          });
+        });
+      }
       document.getElementById('enterSessionBtn').addEventListener('click', () => {
         const code = document.getElementById('existingCode').value.trim().toUpperCase();
         if (!code) { showToast('코드를 입력해 주세요'); return; }
