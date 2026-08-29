@@ -857,7 +857,10 @@ const MasterApp = (() => {
       ` : ''}
 
       ${teamArr.length > 0 ? `
-        <h2 class="font-bold text-[18px] mb-4">팀 현황</h2>
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="font-bold text-[18px]">팀 현황</h2>
+          <button id="deleteAllTeamsBtn" class="text-brand-red text-[13px] font-medium hover:underline">전체 팀 삭제</button>
+        </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           ${teamArr.map((team, idx) => {
             const members = playerArr.filter(p => p.teamId === team.id);
@@ -867,7 +870,12 @@ const MasterApp = (() => {
               <div class="bento-card border-l-4 border-l-${color}">
                 <div class="flex items-center justify-between mb-3">
                   <h3 class="font-bold text-[16px]">${team.name}</h3>
-                  <span class="text-brand-gray-text text-[13px]">${members.length}명</span>
+                  <div class="flex items-center gap-3">
+                    <span class="text-brand-gray-text text-[13px]">${members.length}명</span>
+                    <button class="delete-team text-brand-gray-text hover:text-brand-red transition-colors" data-team-id="${team.id}" data-team-name="${team.name}" title="팀 삭제">
+                      <span class="material-symbols-outlined text-[20px]">delete</span>
+                    </button>
+                  </div>
                 </div>
                 <div class="flex flex-wrap gap-2">
                   ${members.length > 0 ? members.map(m => `<span class="bg-brand-gray-light text-brand-gray-dark rounded-full px-3 py-1 text-[13px] font-medium">${m.name}</span>`).join('') : '<span class="text-brand-gray-text/70 text-[13px] italic">배정된 팀원 없음</span>'}
@@ -884,11 +892,17 @@ const MasterApp = (() => {
     document.getElementById('bulkCreateTeamsBtn')?.addEventListener('click', () => {
       const count = parseInt(document.getElementById('teamCount').value) || 0;
       if (count < 1 || count > 20) { showToast('1~20 사이'); return; }
-      const existing = sessionData.teams ? Object.keys(sessionData.teams).length : 0;
+      // 기존 팀 이름에서 최대 번호를 찾아 이어서 매김
+      const teams = sessionData.teams || {};
+      let maxNum = 0;
+      Object.values(teams).forEach(t => {
+        const m = String(t.name || '').match(/(\d+)/);
+        if (m) maxNum = Math.max(maxNum, parseInt(m[1]));
+      });
       const updates = {};
       for (let i = 1; i <= count; i++) {
         const key = db.ref(`sessions/${sessionId}/teams`).push().key;
-        updates[key] = { name: `${existing + i}조`, createdAt: Date.now() };
+        updates[key] = { name: `${maxNum + i}조`, createdAt: Date.now() };
       }
       db.ref(`sessions/${sessionId}/teams`).update(updates).then(() => showToast(`${count}개 팀 생성됨`));
     });
@@ -899,6 +913,50 @@ const MasterApp = (() => {
         if (!newTeamId) return;
         db.ref(`sessions/${sessionId}/players/${playerId}/teamId`).set(newTeamId).then(() => showToast('팀 변경됨'));
       });
+    });
+
+    // 개별 팀 삭제
+    document.querySelectorAll('.delete-team').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const teamId = btn.dataset.teamId;
+        const teamName = btn.dataset.teamName;
+        const players = sessionData.players || {};
+        const memberCount = Object.values(players).filter(p => p.teamId === teamId).length;
+
+        const msg = memberCount > 0
+          ? `${teamName}을(를) 삭제하시겠습니까?\n소속 참가자 ${memberCount}명은 '미배정' 상태가 됩니다.`
+          : `${teamName}을(를) 삭제하시겠습니까?`;
+        if (!confirm(msg)) return;
+
+        const updates = {};
+        // 소속 참가자 미배정 처리
+        Object.entries(players).forEach(([pid, p]) => {
+          if (p.teamId === teamId) {
+            updates[`sessions/${sessionId}/players/${pid}/teamId`] = '';
+          }
+        });
+        // 팀 삭제
+        updates[`sessions/${sessionId}/teams/${teamId}`] = null;
+
+        db.ref().update(updates).then(() => showToast(`${teamName} 삭제됨`));
+      });
+    });
+
+    // 전체 팀 삭제
+    document.getElementById('deleteAllTeamsBtn')?.addEventListener('click', () => {
+      const teams = sessionData.teams || {};
+      const teamCount = Object.keys(teams).length;
+      if (teamCount === 0) return;
+      if (!confirm(`전체 팀 ${teamCount}개를 모두 삭제하시겠습니까?\n모든 참가자가 '미배정' 상태가 됩니다.`)) return;
+
+      const players = sessionData.players || {};
+      const updates = {};
+      Object.keys(players).forEach(pid => {
+        updates[`sessions/${sessionId}/players/${pid}/teamId`] = '';
+      });
+      updates[`sessions/${sessionId}/teams`] = null;
+
+      db.ref().update(updates).then(() => showToast('전체 팀 삭제됨'));
     });
   }
 
