@@ -154,9 +154,12 @@ const PlayerApp = (() => {
 
   // ===== MAIN RENDER =====
   function renderMain(phase) {
-    db.ref(`sessions/${sessionId}/investments`).orderByChild('playerId').equalTo(playerId).once('value').then(snap => {
+    db.ref(`sessions/${sessionId}/investments`).once('value').then(snap => {
       const investments = [];
-      snap.forEach(child => investments.push({ id: child.key, ...child.val() }));
+      snap.forEach(child => {
+        const inv = child.val();
+        if (inv.playerId === playerId) investments.push({ id: child.key, ...inv });
+      });
 
       const myMatured = investments.filter(inv => inv.maturityTurn <= currentTurn && inv.result === 'pending');
       const active = investments.filter(inv => inv.result === 'pending');
@@ -584,9 +587,9 @@ const PlayerApp = (() => {
       document.body.appendChild(shareCard);
 
       // 수치 채우기
-      db.ref(`sessions/${sessionId}/investments`).orderByChild('playerId').equalTo(playerId).once('value').then(snap => {
+      db.ref(`sessions/${sessionId}/investments`).once('value').then(snap => {
         const invs = [];
-        snap.forEach(c => invs.push(c.val()));
+        snap.forEach(c => { const v = c.val(); if (v.playerId === playerId) invs.push(v); });
         const settled = invs.filter(i => i.result && i.result !== 'pending');
         const profit = settled.reduce((s, i) => s + (i.profitAmount || 0), 0);
         const loss = settled.reduce((s, i) => s + (i.lossAmount || 0), 0);
