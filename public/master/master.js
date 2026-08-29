@@ -308,12 +308,22 @@ const MasterApp = (() => {
         </div>
       ` : ''}
 
-      <!-- URL -->
+      <!-- URL + QR -->
       <div class="bento-card">
-        <span class="text-brand-gray-text text-[13px] font-medium">참가자 접속 URL</span>
-        <div class="flex gap-2 mt-3">
-          <div class="flex-1 bg-surface-container-low border border-outline-variant rounded-lg px-4 flex items-center text-outline font-mono text-[13px] overflow-hidden text-ellipsis whitespace-nowrap h-[48px]" id="playerUrl">${window.location.origin}/player/?session=${sessionId}</div>
-          <button id="copyUrlBtn" class="bg-surface-container-high text-on-surface font-medium px-5 rounded-lg h-[48px] hover:bg-surface-variant transition-colors border border-outline-variant text-[13px]">복사</button>
+        <span class="text-brand-gray-text text-[13px] font-medium">참가자 접속</span>
+        <div class="flex flex-col-reverse sm:flex-row gap-5 mt-3 items-center sm:items-start">
+          <div class="flex-1 w-full">
+            <div class="flex gap-2">
+              <div class="flex-1 bg-surface-container-low border border-outline-variant rounded-lg px-4 flex items-center text-outline font-mono text-[13px] overflow-hidden text-ellipsis whitespace-nowrap h-[48px]" id="playerUrl">${window.location.origin}/player/?session=${sessionId}</div>
+              <button id="copyUrlBtn" class="bg-surface-container-high text-on-surface font-medium px-5 rounded-lg h-[48px] hover:bg-surface-variant transition-colors border border-outline-variant text-[13px]">복사</button>
+            </div>
+            <p class="text-brand-gray-text text-[12px] mt-2">참가자는 QR을 찍거나 위 주소로 접속하세요.</p>
+          </div>
+          <div class="text-center shrink-0">
+            <img src="https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(window.location.origin + '/player/?session=' + sessionId)}"
+              alt="접속 QR코드" width="140" height="140" class="rounded-lg border border-outline-variant bg-white p-1" />
+            <p class="text-brand-gray-text text-[11px] mt-1">QR 스캔</p>
+          </div>
         </div>
       </div>
     `;
