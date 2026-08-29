@@ -488,60 +488,57 @@ const PlayerApp = (() => {
     `;
   }
 
-  // ===== 조별 순위 + 결과 공유 =====
-  function renderTeamRanking() {
-    // 전체 참가자 데이터 가져와서 조별 순위 표시
+  // ===== 내 투자 요약 (순위 없이, 나만의 기준) =====
+  function renderMySummary() {
     return new Promise(resolve => {
-      db.ref(`sessions/${sessionId}`).once('value').then(snap => {
-        const data = snap.val() || {};
-        const players = data.players || {};
-        const investments = data.investments || {};
-        const teams = data.teams || {};
+      db.ref(`sessions/${sessionId}/investments`).once('value').then(snap => {
+        const myInv = [];
+        snap.forEach(c => { const v = c.val(); if (v.playerId === playerId) myInv.push(v); });
 
-        const playerArr = Object.entries(players).map(([id, p]) => ({ id, ...p }));
-        const investArr = Object.entries(investments).map(([id, inv]) => ({ id, ...inv }));
-        const teamArr = Object.entries(teams).map(([id, t]) => ({ id, ...t }));
-
-        // 내 팀 찾기
-        const myTeam = teamArr.find(t => t.id === playerTeam);
-        const myTeamMembers = playerArr.filter(p => p.teamId === playerTeam);
-
-        // 팀원별 순수익 계산
-        const memberStats = myTeamMembers.map(p => {
-          const pInv = investArr.filter(i => i.playerId === p.id && i.result && i.result !== 'pending');
-          const net = pInv.reduce((s, i) => s + (i.profitAmount || 0) + (i.lossAmount || 0), 0);
-          const totalInvested = investArr.filter(i => i.playerId === p.id).reduce((s, i) => s + (i.amount || 0), 0);
-          return { ...p, netProfit: net, investCount: investArr.filter(i => i.playerId === p.id).length, totalInvested };
-        }).sort((a, b) => b.netProfit - a.netProfit);
-
-        // 내 순위
-        const myRank = memberStats.findIndex(m => m.id === playerId) + 1;
-        const myStats = memberStats.find(m => m.id === playerId) || { netProfit: 0, investCount: 0, totalInvested: 0 };
+        const settled = myInv.filter(i => i.result && i.result !== 'pending');
+        const totalProfit = settled.reduce((s, i) => s + (i.profitAmount || 0), 0);
+        const totalLoss = settled.reduce((s, i) => s + (i.lossAmount || 0), 0);
+        const totalInvested = myInv.reduce((s, i) => s + (i.amount || 0), 0);
+        const successCount = settled.filter(i => i.result === 'success' || i.result === 'earlyTerm').length;
+        const failCount = settled.filter(i => i.result === 'fail' || i.result === 'earlyTermFail').length;
 
         resolve(`
           <div class="bg-white rounded-2xl p-5 shadow-card mt-4">
-            <h2 class="font-bold text-[16px] text-on-surface mb-4">🏅 ${myTeam?.name || '우리 팀'} 순위</h2>
-            
-            <div class="bg-brand-blue/5 rounded-xl p-4 mb-4 text-center">
-              <div class="text-brand-gray-text text-[12px]">내 순위</div>
-              <div class="text-[28px] font-bold text-brand-blue">${myRank}위</div>
-              <div class="text-[13px] text-brand-gray-text">${myTeamMembers.length}명 중</div>
+            <h2 class="font-bold text-[16px] text-on-surface mb-1">📊 나의 투자 요약</h2>
+            <p class="text-brand-gray-text text-[12px] mb-4">나만의 기준으로 돌아보는 5년</p>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div class="bg-surface-container-low rounded-xl p-4 text-center">
+                <div class="text-[24px] font-bold text-on-surface">${myInv.length}</div>
+                <div class="text-brand-gray-text text-[12px] mt-1">총 투자 횟수</div>
+              </div>
+              <div class="bg-surface-container-low rounded-xl p-4 text-center">
+                <div class="text-[24px] font-bold text-on-surface">${formatAmount(totalInvested)}</div>
+                <div class="text-brand-gray-text text-[12px] mt-1">총 투자액(만원)</div>
+              </div>
+              <div class="bg-brand-green-light rounded-xl p-4 text-center">
+                <div class="text-[24px] font-bold text-brand-green">+${formatAmount(totalProfit)}</div>
+                <div class="text-brand-gray-text text-[12px] mt-1">총 수익</div>
+              </div>
+              <div class="bg-brand-red-light rounded-xl p-4 text-center">
+                <div class="text-[24px] font-bold text-brand-red">${formatAmount(totalLoss)}</div>
+                <div class="text-brand-gray-text text-[12px] mt-1">총 손실</div>
+              </div>
             </div>
 
-            <div class="space-y-2">
-              ${memberStats.map((m, idx) => {
-                const isMe = m.id === playerId;
-                const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}`;
-                return `
-                  <div class="flex items-center justify-between p-3 rounded-lg ${isMe ? 'bg-brand-blue/10 border border-brand-blue/30' : 'bg-surface-container-low'}">
-                    <div class="flex items-center gap-3">
-                      <span class="text-[14px] w-6 text-center">${medal}</span>
-                      <span class="font-medium text-[14px] ${isMe ? 'text-brand-blue font-bold' : ''}">${m.name}${isMe ? ' (나)' : ''}</span>
-                    </div>
-                    <span class="font-bold text-[14px] ${m.netProfit >= 0 ? 'text-brand-green' : 'text-brand-red'}">${m.netProfit >= 0 ? '+' : ''}${formatAmount(m.netProfit)}</span>
-                  </div>
-                `;
-              }).join('')}
+            <div class="flex justify-around mt-4 pt-4 border-t border-brand-gray-light text-center">
+              <div>
+                <div class="text-[18px] font-bold text-brand-green">${successCount}</div>
+                <div class="text-brand-gray-text text-[11px]">성공</div>
+              </div>
+              <div>
+                <div class="text-[18px] font-bold text-brand-red">${failCount}</div>
+                <div class="text-brand-gray-text text-[11px]">실패</div>
+              </div>
+              <div>
+                <div class="text-[18px] font-bold ${(totalProfit+totalLoss) >= 0 ? 'text-brand-green' : 'text-brand-red'}">${(totalProfit+totalLoss) >= 0 ? '+' : ''}${formatAmount(totalProfit + totalLoss)}</div>
+                <div class="text-brand-gray-text text-[11px]">순수익</div>
+              </div>
             </div>
           </div>
         `);
@@ -551,8 +548,8 @@ const PlayerApp = (() => {
 
   function bindShareResult() {
     document.getElementById('shareResultBtn')?.addEventListener('click', async () => {
-      // 팀 순위 가져와서 모달로 표시
-      const rankingHtml = await renderTeamRanking();
+      // 내 투자 요약 (순위 없음)
+      const rankingHtml = await renderMySummary();
       
       // 공유 가능한 결과 카드 생성
       const shareCard = document.createElement('div');
