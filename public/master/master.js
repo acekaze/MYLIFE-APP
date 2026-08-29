@@ -2,53 +2,305 @@
  * 관리자 뷰 (Stitch 디자인 적용)
  */
 const MasterApp = (() => {
+  const MASTER_PIN = '848614';
   let sessionId = null;
   let sessionData = null;
   let currentTab = 'dashboard';
+  let authRole = null;   // 'master' | 'trainer'
+  let authName = null;   // 트레이너 이름 (master는 null)
+  let authId = null;     // ownerId (트레이너 식별용)
 
   function init() {
+    // 저장된 인증 복원
+    authRole = localStorage.getItem('mylife_auth_role');
+    authName = localStorage.getItem('mylife_auth_name');
+    authId = localStorage.getItem('mylife_auth_id');
+
+    if (!authRole) {
+      renderLogin();
+      return;
+    }
+
+    // 세션에 이미 들어가 있으면 그 세션으로
     sessionId = localStorage.getItem('mylife_master_session');
     if (sessionId) enterSession();
-    else renderSessionSelect();
+    else renderSessionList();
   }
 
-  // ===== SESSION SELECT =====
-  function renderSessionSelect() {
+  // ===== 로그인 =====
+  function renderLogin() {
     document.getElementById('app').innerHTML = `
       <div class="min-h-screen flex flex-col items-center justify-center p-5 bg-background">
         <main class="w-full max-w-[360px] flex flex-col items-center">
           <header class="text-center mb-8">
             <h1 class="text-[28px] font-bold text-on-surface">My Life</h1>
-            <p class="text-[14px] text-brand-gray-text mt-1">관리자</p>
+            <p class="text-[14px] text-brand-gray-text mt-1">관리자 로그인</p>
           </header>
           <div class="bg-white rounded-2xl p-6 w-full shadow-card space-y-6">
+            <!-- 총관리자 -->
             <div>
-              <h2 class="font-bold text-[16px] mb-4">새 세션 만들기</h2>
+              <h2 class="font-bold text-[16px] mb-3">총관리자</h2>
               <div class="flex flex-col gap-3">
-                <input type="text" id="newSessionName" class="h-[48px] rounded-xl border border-brand-border px-4 text-[16px] focus:border-brand-blue focus:ring-1 focus:ring-brand-blue outline-none" placeholder="세션 이름 (예: 3월 워크숍)">
-                <button id="createSessionBtn" class="w-full h-[48px] bg-brand-blue text-white rounded-xl font-bold active:scale-[0.98] transition-transform">세션 생성</button>
+                <input type="password" id="masterPin" class="h-[48px] rounded-xl border border-brand-border px-4 text-[16px] focus:border-brand-blue focus:ring-1 focus:ring-brand-blue outline-none" placeholder="마스터 PIN" inputmode="numeric">
+                <button id="masterLoginBtn" class="w-full h-[48px] bg-brand-blue text-white rounded-xl font-bold active:scale-[0.98] transition-transform">총관리자 로그인</button>
               </div>
             </div>
             <hr class="border-brand-gray-light">
+            <!-- 트레이너 -->
             <div>
-              <h2 class="font-bold text-[16px] mb-4">기존 세션 입장</h2>
+              <h2 class="font-bold text-[16px] mb-3">트레이너</h2>
               <div class="flex flex-col gap-3">
-                <input type="text" id="existingCode" class="h-[48px] rounded-xl border border-brand-border px-4 text-[16px] uppercase focus:border-brand-blue focus:ring-1 focus:ring-brand-blue outline-none" placeholder="세션 코드 입력">
-                <button id="enterSessionBtn" class="w-full h-[48px] bg-brand-gray-light text-brand-gray-dark rounded-xl font-bold active:scale-[0.98] transition-transform">입장</button>
+                <input type="text" id="trainerName" class="h-[48px] rounded-xl border border-brand-border px-4 text-[16px] focus:border-brand-blue focus:ring-1 focus:ring-brand-blue outline-none" placeholder="이름">
+                <input type="password" id="trainerPin" class="h-[48px] rounded-xl border border-brand-border px-4 text-[16px] focus:border-brand-blue focus:ring-1 focus:ring-brand-blue outline-none" placeholder="PIN" inputmode="numeric">
+                <button id="trainerLoginBtn" class="w-full h-[48px] bg-brand-gray-light text-brand-gray-dark rounded-xl font-bold active:scale-[0.98] transition-transform">트레이너 로그인</button>
+                <button id="trainerApplyBtn" class="text-brand-blue text-[13px] font-medium mt-1">트레이너 신청하기</button>
               </div>
             </div>
           </div>
         </main>
       </div>
     `;
-    document.getElementById('createSessionBtn').addEventListener('click', createSession);
-    document.getElementById('enterSessionBtn').addEventListener('click', () => {
-      const code = document.getElementById('existingCode').value.trim().toUpperCase();
-      if (!code) { showToast('코드를 입력해 주세요'); return; }
-      sessionId = code;
-      localStorage.setItem('mylife_master_session', sessionId);
-      enterSession();
+
+    document.getElementById('masterLoginBtn').addEventListener('click', () => {
+      const pin = document.getElementById('masterPin').value.trim();
+      if (pin !== MASTER_PIN) { showToast('PIN이 올바르지 않습니다'); return; }
+      authRole = 'master'; authName = null; authId = 'master';
+      localStorage.setItem('mylife_auth_role', 'master');
+      localStorage.setItem('mylife_auth_id', 'master');
+      localStorage.removeItem('mylife_auth_name');
+      showToast('총관리자 로그인');
+      renderSessionList();
     });
+
+    document.getElementById('trainerLoginBtn').addEventListener('click', trainerLogin);
+    document.getElementById('trainerApplyBtn').addEventListener('click', renderTrainerApply);
+  }
+
+  function trainerLogin() {
+    const name = document.getElementById('trainerName').value.trim();
+    const pin = document.getElementById('trainerPin').value.trim();
+    if (!name || !pin) { showToast('이름과 PIN을 입력해 주세요'); return; }
+
+    const tid = `${name}_${pin}`;
+    db.ref(`trainers/${btoa(unescape(encodeURIComponent(tid)))}`).once('value').then(snap => {
+      const trainer = snap.val();
+      if (!trainer) { showToast('신청 내역이 없습니다. 먼저 신청해 주세요'); return; }
+      if (trainer.status === 'pending') { showToast('아직 승인 대기 중입니다'); return; }
+      if (trainer.status === 'rejected') { showToast('승인이 거절되었습니다'); return; }
+      if (trainer.status === 'approved') {
+        authRole = 'trainer'; authName = name; authId = tid;
+        localStorage.setItem('mylife_auth_role', 'trainer');
+        localStorage.setItem('mylife_auth_name', name);
+        localStorage.setItem('mylife_auth_id', tid);
+        showToast(`${name} 트레이너 로그인`);
+        renderSessionList();
+      }
+    });
+  }
+
+  function renderTrainerApply() {
+    document.getElementById('app').innerHTML = `
+      <div class="min-h-screen flex flex-col items-center justify-center p-5 bg-background">
+        <main class="w-full max-w-[360px] flex flex-col items-center">
+          <header class="text-center mb-8">
+            <h1 class="text-[28px] font-bold text-on-surface">트레이너 신청</h1>
+            <p class="text-[14px] text-brand-gray-text mt-1">총관리자 승인 후 사용 가능</p>
+          </header>
+          <div class="bg-white rounded-2xl p-6 w-full shadow-card">
+            <div class="flex flex-col gap-3">
+              <input type="text" id="applyName" class="h-[48px] rounded-xl border border-brand-border px-4 text-[16px] focus:border-brand-blue outline-none" placeholder="이름">
+              <input type="password" id="applyPin" class="h-[48px] rounded-xl border border-brand-border px-4 text-[16px] focus:border-brand-blue outline-none" placeholder="사용할 PIN (기억하세요)" inputmode="numeric">
+              <button id="submitApplyBtn" class="w-full h-[48px] bg-brand-blue text-white rounded-xl font-bold active:scale-[0.98] transition-transform">신청하기</button>
+              <button id="backToLoginBtn" class="text-brand-gray-text text-[13px] font-medium mt-1">← 로그인으로 돌아가기</button>
+            </div>
+          </div>
+        </main>
+      </div>
+    `;
+    document.getElementById('submitApplyBtn').addEventListener('click', () => {
+      const name = document.getElementById('applyName').value.trim();
+      const pin = document.getElementById('applyPin').value.trim();
+      if (!name || !pin) { showToast('이름과 PIN을 입력해 주세요'); return; }
+      const tid = `${name}_${pin}`;
+      const key = btoa(unescape(encodeURIComponent(tid)));
+      db.ref(`trainers/${key}`).once('value').then(snap => {
+        if (snap.exists()) { showToast('이미 신청되었습니다'); return; }
+        db.ref(`trainers/${key}`).set({
+          name, tid, status: 'pending', appliedAt: Date.now(),
+        }).then(() => {
+          showToast('신청 완료! 총관리자 승인을 기다려 주세요');
+          renderLogin();
+        });
+      });
+    });
+    document.getElementById('backToLoginBtn').addEventListener('click', renderLogin);
+  }
+
+  // ===== 세션 목록 =====
+  function renderSessionList() {
+    db.ref('sessions').once('value').then(snap => {
+      const all = snap.val() || {};
+      let sessions = Object.entries(all).map(([id, s]) => ({ id, ...s }));
+
+      // 트레이너는 본인 세션만
+      if (authRole === 'trainer') {
+        sessions = sessions.filter(s => s.ownerId === authId);
+      }
+      sessions.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+      document.getElementById('app').innerHTML = `
+        <div class="min-h-screen flex flex-col items-center p-5 bg-background">
+          <main class="w-full max-w-[480px] flex flex-col">
+            <header class="text-center my-6">
+              <h1 class="text-[28px] font-bold text-on-surface">My Life</h1>
+              <p class="text-[14px] text-brand-gray-text mt-1">${authRole === 'master' ? '총관리자' : authName + ' 트레이너'}</p>
+            </header>
+
+            <!-- 새 세션 -->
+            <div class="bg-white rounded-2xl p-6 w-full shadow-card mb-4">
+              <h2 class="font-bold text-[16px] mb-3">새 세션 만들기</h2>
+              <div class="flex flex-col gap-3">
+                <input type="text" id="newSessionName" class="h-[48px] rounded-xl border border-brand-border px-4 text-[16px] focus:border-brand-blue outline-none" placeholder="세션 이름 (예: 3월 워크숍)">
+                <button id="createSessionBtn" class="w-full h-[48px] bg-brand-blue text-white rounded-xl font-bold active:scale-[0.98] transition-transform">세션 생성</button>
+              </div>
+            </div>
+
+            ${authRole === 'master' ? renderPendingTrainersPlaceholder() : ''}
+
+            <!-- 세션 목록 -->
+            <div class="bg-white rounded-2xl p-6 w-full shadow-card mb-4">
+              <h2 class="font-bold text-[16px] mb-3">${authRole === 'master' ? '전체 세션' : '내 세션'} (${sessions.length})</h2>
+              ${sessions.length === 0 ? '<p class="text-brand-gray-text text-[14px] text-center py-6">세션이 없습니다</p>' : `
+                <div class="space-y-2">
+                  ${sessions.map(s => `
+                    <button class="session-item w-full flex items-center justify-between p-4 rounded-xl border border-outline-variant hover:border-brand-blue transition-colors text-left" data-id="${s.id}">
+                      <div>
+                        <div class="font-bold text-[15px]">${s.name || '(이름 없음)'}</div>
+                        <div class="text-brand-gray-text text-[12px] mt-0.5">
+                          코드 ${s.id} · ${s.players ? Object.keys(s.players).length : 0}명 · 턴 ${s.state?.currentTurn || 1}
+                          ${s.state?.gameEnded ? ' · 🏁종료' : ''}
+                        </div>
+                      </div>
+                      <span class="material-symbols-outlined text-brand-gray-text">chevron_right</span>
+                    </button>
+                  `).join('')}
+                </div>
+              `}
+            </div>
+
+            <!-- 코드로 직접 입장 -->
+            <div class="bg-white rounded-2xl p-6 w-full shadow-card mb-4">
+              <h2 class="font-bold text-[16px] mb-3">코드로 입장</h2>
+              <div class="flex gap-2">
+                <input type="text" id="existingCode" class="flex-1 h-[48px] rounded-xl border border-brand-border px-4 text-[16px] uppercase focus:border-brand-blue outline-none" placeholder="세션 코드">
+                <button id="enterSessionBtn" class="px-5 h-[48px] bg-brand-gray-light text-brand-gray-dark rounded-xl font-bold">입장</button>
+              </div>
+            </div>
+
+            <button id="logoutBtn" class="text-brand-gray-text text-[13px] font-medium py-2">로그아웃</button>
+          </main>
+        </div>
+      `;
+
+      document.getElementById('createSessionBtn').addEventListener('click', createSession);
+      document.querySelectorAll('.session-item').forEach(btn => {
+        btn.addEventListener('click', () => {
+          sessionId = btn.dataset.id;
+          localStorage.setItem('mylife_master_session', sessionId);
+          enterSession();
+        });
+      });
+      document.getElementById('enterSessionBtn').addEventListener('click', () => {
+        const code = document.getElementById('existingCode').value.trim().toUpperCase();
+        if (!code) { showToast('코드를 입력해 주세요'); return; }
+        sessionId = code;
+        localStorage.setItem('mylife_master_session', sessionId);
+        enterSession();
+      });
+      document.getElementById('logoutBtn').addEventListener('click', logout);
+
+      // 총관리자면 승인 대기 목록 채우기
+      if (authRole === 'master') loadPendingTrainers();
+    });
+  }
+
+  function renderPendingTrainersPlaceholder() {
+    return `<div id="pendingTrainersBox" class="mb-4"></div>`;
+  }
+
+  function loadPendingTrainers() {
+    db.ref('trainers').once('value').then(snap => {
+      const all = snap.val() || {};
+      const trainers = Object.entries(all).map(([key, t]) => ({ key, ...t }));
+      const pending = trainers.filter(t => t.status === 'pending');
+      const approved = trainers.filter(t => t.status === 'approved');
+
+      const box = document.getElementById('pendingTrainersBox');
+      if (!box) return;
+
+      box.innerHTML = `
+        <div class="bg-white rounded-2xl p-6 w-full shadow-card">
+          <h2 class="font-bold text-[16px] mb-3">트레이너 관리</h2>
+          ${pending.length > 0 ? `
+            <p class="text-[13px] text-brand-orange font-medium mb-2">승인 대기 (${pending.length})</p>
+            <div class="space-y-2 mb-4">
+              ${pending.map(t => `
+                <div class="flex items-center justify-between p-3 rounded-xl bg-brand-orange-light">
+                  <span class="font-medium text-[14px]">${t.name}</span>
+                  <div class="flex gap-2">
+                    <button class="approve-trainer h-8 px-3 bg-brand-green text-white rounded-lg text-[13px] font-bold" data-key="${t.key}">승인</button>
+                    <button class="reject-trainer h-8 px-3 bg-brand-gray-light text-brand-gray-dark rounded-lg text-[13px]" data-key="${t.key}">거절</button>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          ` : '<p class="text-brand-gray-text text-[13px] mb-2">승인 대기 없음</p>'}
+          ${approved.length > 0 ? `
+            <p class="text-[13px] text-brand-gray-text font-medium mb-2">승인된 트레이너 (${approved.length})</p>
+            <div class="flex flex-wrap gap-2">
+              ${approved.map(t => `
+                <span class="inline-flex items-center gap-1 bg-brand-green-light text-brand-green px-3 py-1 rounded-full text-[13px] font-medium">
+                  ${t.name}
+                  <button class="revoke-trainer text-brand-red ml-1" data-key="${t.key}" title="권한 회수">×</button>
+                </span>
+              `).join('')}
+            </div>
+          ` : ''}
+        </div>
+      `;
+
+      box.querySelectorAll('.approve-trainer').forEach(btn => {
+        btn.addEventListener('click', () => {
+          db.ref(`trainers/${btn.dataset.key}/status`).set('approved').then(() => {
+            showToast('승인 완료'); loadPendingTrainers();
+          });
+        });
+      });
+      box.querySelectorAll('.reject-trainer').forEach(btn => {
+        btn.addEventListener('click', () => {
+          db.ref(`trainers/${btn.dataset.key}/status`).set('rejected').then(() => {
+            showToast('거절됨'); loadPendingTrainers();
+          });
+        });
+      });
+      box.querySelectorAll('.revoke-trainer').forEach(btn => {
+        btn.addEventListener('click', () => {
+          if (!confirm('이 트레이너의 권한을 회수하시겠습니까?')) return;
+          db.ref(`trainers/${btn.dataset.key}`).remove().then(() => {
+            showToast('권한 회수됨'); loadPendingTrainers();
+          });
+        });
+      });
+    });
+  }
+
+  function logout() {
+    localStorage.removeItem('mylife_auth_role');
+    localStorage.removeItem('mylife_auth_name');
+    localStorage.removeItem('mylife_auth_id');
+    localStorage.removeItem('mylife_master_session');
+    authRole = authName = authId = sessionId = null;
+    renderLogin();
   }
 
   function createSession() {
@@ -58,6 +310,7 @@ const MasterApp = (() => {
     sessionId = code;
     db.ref(`sessions/${code}`).set({
       name, code, createdAt: Date.now(),
+      ownerId: authId, ownerName: authName || '총관리자',
       state: { currentTurn: 1, phase: 'investing', maxTurns: 20, gameEnded: false },
     }).then(() => {
       localStorage.setItem('mylife_master_session', sessionId);
@@ -78,7 +331,7 @@ const MasterApp = (() => {
       if (!snap.exists()) {
         showToast('세션을 찾을 수 없습니다');
         localStorage.removeItem('mylife_master_session');
-        renderSessionSelect();
+        renderSessionList();
         return;
       }
       sessionData = snap.val();
@@ -178,7 +431,7 @@ const MasterApp = (() => {
       localStorage.removeItem('mylife_master_session');
       db.ref(`sessions/${sessionId}`).off();
       sessionId = null;
-      renderSessionSelect();
+      renderSessionList();
     });
 
     document.querySelectorAll('.nav-item').forEach(item => {
