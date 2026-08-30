@@ -246,3 +246,100 @@ function rollDiceWithAnimation(displayEl, callback) {
   animateDice(displayEl, finalValue, callback);
   return finalValue;
 }
+
+
+// ===== 연출 효과 (성공 축하 / 턴 전환 / 게임 종료) =====
+
+// 연출용 CSS를 한 번만 주입
+(function injectEffectStyles() {
+  if (document.getElementById('mylife-effect-styles')) return;
+  const style = document.createElement('style');
+  style.id = 'mylife-effect-styles';
+  style.textContent = `
+    @keyframes mlConfettiFall { 0%{transform:translateY(0) rotate(0);opacity:1} 100%{transform:translateY(400px) rotate(720deg);opacity:0} }
+    @keyframes mlPopIn { 0%{transform:scale(0);opacity:0} 60%{transform:scale(1.3);opacity:1} 100%{transform:scale(1);opacity:1} }
+    @keyframes mlTurnSlide { 0%{opacity:0;transform:scale(0.8) translateY(20px)} 20%{opacity:1;transform:scale(1) translateY(0)} 80%{opacity:1;transform:scale(1) translateY(0)} 100%{opacity:0;transform:scale(1.1) translateY(-10px)} }
+    @keyframes mlFade { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+    .ml-pop-in { animation: mlPopIn 0.5s cubic-bezier(0.34,1.56,0.64,1) both; }
+    .ml-turn-slide { animation: mlTurnSlide 2s ease both; }
+    .ml-fade-item { animation: mlFade 0.6s ease both; }
+  `;
+  document.head.appendChild(style);
+})();
+
+const EFFECT_COLORS = ['#3182F6','#00C48C','#FF9F0A','#FF4D4D','#8B5CF6','#FFD700'];
+
+function ensureOverlay() {
+  let ov = document.getElementById('mlOverlay');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'mlOverlay';
+    document.body.appendChild(ov);
+  }
+  return ov;
+}
+
+// 투자 성공 축하 연출
+function playSuccessEffect(profitAmount) {
+  const ov = ensureOverlay();
+  ov.innerHTML = `
+    <div style="position:fixed; inset:0; z-index:9999; display:flex; align-items:center; justify-content:center; pointer-events:none;">
+      <div class="ml-pop-in" style="background:white; border-radius:24px; padding:32px 40px; box-shadow:0 12px 40px rgba(0,0,0,0.2); text-align:center;">
+        <div style="font-size:56px;">🎉</div>
+        <div style="font-size:22px; font-weight:700; color:#00C48C; margin-top:8px;">투자 성공!</div>
+        ${profitAmount ? `<div style="font-size:28px; font-weight:700; color:#00C48C; margin-top:4px;">+${formatAmount(profitAmount)}만 원</div>` : ''}
+      </div>
+    </div>
+  `;
+  for (let i = 0; i < 40; i++) {
+    const c = document.createElement('div');
+    const size = 6 + Math.random() * 8;
+    c.style.cssText = `position:fixed; z-index:9998; top:-20px; left:${Math.random()*100}vw;
+      width:${size}px; height:${size}px; background:${EFFECT_COLORS[i%EFFECT_COLORS.length]};
+      border-radius:${Math.random()>0.5?'50%':'2px'}; pointer-events:none;
+      animation: mlConfettiFall ${1+Math.random()*1.5}s ease-in ${Math.random()*0.5}s forwards;`;
+    ov.appendChild(c);
+  }
+  setTimeout(() => { ov.innerHTML = ''; }, 2500);
+}
+
+// 턴 전환 연출
+function playTurnEffect(turnNumber) {
+  const ov = ensureOverlay();
+  ov.innerHTML = `
+    <div style="position:fixed; inset:0; z-index:9999; display:flex; align-items:center; justify-content:center; background:rgba(49,130,246,0.92); pointer-events:none;">
+      <div class="ml-turn-slide" style="text-align:center; color:white;">
+        <div style="font-size:15px; opacity:0.85;">다음 분기</div>
+        <div style="font-size:64px; font-weight:700; line-height:1;">턴 ${turnNumber}</div>
+        <div style="font-size:14px; opacity:0.85; margin-top:8px;">새로운 투자를 시작하세요</div>
+      </div>
+    </div>
+  `;
+  setTimeout(() => { ov.innerHTML = ''; }, 2000);
+}
+
+// 게임 종료 마무리 연출
+function playGameEndEffect(summary) {
+  const s = summary || {};
+  const net = s.netResult || 0;
+  const ov = ensureOverlay();
+  ov.innerHTML = `
+    <div style="position:fixed; inset:0; z-index:9999; display:flex; align-items:center; justify-content:center; background:rgba(27,29,31,0.96); padding:24px;">
+      <div style="text-align:center; color:white; max-width:320px; width:100%;">
+        <div class="ml-fade-item" style="font-size:48px; animation-delay:0s;">🏁</div>
+        <div class="ml-fade-item" style="font-size:24px; font-weight:700; margin-top:8px; animation-delay:0.2s;">당신의 5년</div>
+        <div class="ml-fade-item" style="font-size:14px; opacity:0.7; margin-top:4px; animation-delay:0.4s;">${s.maxTurns || 20}턴의 여정이 끝났습니다</div>
+        <div class="ml-fade-item" style="background:rgba(255,255,255,0.1); border-radius:16px; padding:20px; margin-top:24px; animation-delay:0.7s;">
+          <div style="font-size:13px; opacity:0.7;">최종 순수익</div>
+          <div style="font-size:40px; font-weight:700; color:${net >= 0 ? '#00C48C' : '#FF4D4D'};">${net >= 0 ? '+' : ''}${formatAmount(net)}<span style="font-size:16px; opacity:0.7;"> 만원</span></div>
+          <div style="display:flex; justify-content:space-around; margin-top:16px; padding-top:16px; border-top:1px solid rgba(255,255,255,0.15);">
+            <div><div style="font-size:18px; font-weight:700;">${s.total || 0}</div><div style="font-size:11px; opacity:0.6;">투자</div></div>
+            <div><div style="font-size:18px; font-weight:700; color:#00C48C;">${s.successCount || 0}</div><div style="font-size:11px; opacity:0.6;">성공</div></div>
+            <div><div style="font-size:18px; font-weight:700; color:#FF4D4D;">${s.failCount || 0}</div><div style="font-size:11px; opacity:0.6;">실패</div></div>
+          </div>
+        </div>
+        <button class="ml-fade-item" onclick="document.getElementById('mlOverlay').innerHTML=''" style="margin-top:20px; background:white; color:#191c1e; border:none; border-radius:12px; padding:12px 24px; font-weight:700; animation-delay:1s; cursor:pointer;">닫기</button>
+      </div>
+    </div>
+  `;
+}

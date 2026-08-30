@@ -140,12 +140,28 @@ const PlayerApp = (() => {
   }
 
   // ===== SESSION =====
+  let prevTurn = null;
+  let prevPhase = null;
   function enterSession() {
     db.ref(`sessions/${sessionId}/state`).on('value', snap => {
       const state = snap.val() || {};
-      currentTurn = state.currentTurn || 1;
+      const newTurn = state.currentTurn || 1;
+      const newPhase = state.phase || 'investing';
       maxTurns = state.maxTurns || 20;
-      renderMain(state.phase || 'investing');
+
+      // 턴 전환 연출 (투자 접수 상태로 턴이 올라갈 때)
+      if (prevTurn !== null && newTurn > prevTurn && newPhase === 'investing') {
+        playTurnEffect(newTurn);
+      }
+      // 게임 종료 연출
+      if (prevPhase !== null && prevPhase !== 'ended' && newPhase === 'ended') {
+        showGameEndEffect();
+      }
+      prevTurn = newTurn;
+      prevPhase = newPhase;
+
+      currentTurn = newTurn;
+      renderMain(newPhase);
     });
     db.ref(`sessions/${sessionId}/investments`).on('value', () => {
       db.ref(`sessions/${sessionId}/state`).once('value').then(snap => {
@@ -230,6 +246,22 @@ const PlayerApp = (() => {
         <p class="text-brand-gray-text text-[14px]">모든 투자가 정산되었습니다.<br>아래에서 최종 결과를 확인하세요.</p>
       </div>
     `;
+  }
+
+  function showGameEndEffect() {
+    db.ref(`sessions/${sessionId}/investments`).once('value').then(snap => {
+      const myInv = [];
+      snap.forEach(c => { const v = c.val(); if (v.playerId === playerId) myInv.push(v); });
+      const settled = myInv.filter(i => i.result && i.result !== 'pending');
+      const totalProfit = settled.reduce((s, i) => s + (i.profitAmount || 0), 0);
+      const totalLoss = settled.reduce((s, i) => s + (i.lossAmount || 0), 0);
+      const successCount = settled.filter(i => i.result === 'success' || i.result === 'earlyTerm').length;
+      const failCount = settled.filter(i => i.result === 'fail' || i.result === 'earlyTermFail').length;
+      playGameEndEffect({
+        total: myInv.length, successCount, failCount,
+        netResult: totalProfit + totalLoss, maxTurns,
+      });
+    });
   }
 
   // ===== INVEST FORM =====
@@ -422,7 +454,10 @@ const PlayerApp = (() => {
       diceValue: dice, result,
       profitAmount: calc.profitAmount, lossAmount: calc.lossAmount, preserveAmount: calc.preserveAmount,
       settledAt: Date.now(),
-    }).then(() => showToast(`${inv.productName}: ${resultLabel(result)} (주사위 ${dice})`));
+    }).then(() => {
+      showToast(`${inv.productName}: ${resultLabel(result)} (주사위 ${dice})`);
+      if (result === 'success') playSuccessEffect(calc.profitAmount);
+    });
   }
 
   // ===== STATS =====
