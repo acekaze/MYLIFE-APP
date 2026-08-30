@@ -42,9 +42,10 @@ const PlayerApp = (() => {
     document.getElementById('app').innerHTML = `
       <div class="min-h-screen flex flex-col items-center justify-center p-5">
         <main class="w-full max-w-[320px] flex flex-col items-center">
-          <header class="text-center mb-8 w-full">
+          <header class="text-center mb-8 w-full flex flex-col items-center">
+            <img src="../logo.png" alt="My Life" width="80" height="80" class="mb-3" style="filter: drop-shadow(0 8px 20px rgba(49,130,246,0.15));">
             <h1 class="text-[28px] font-bold text-on-surface tracking-tight">My Life</h1>
-            <p class="text-[14px] text-brand-gray-text mt-1">투자 보드게임</p>
+            <p class="text-[14px] text-brand-gray-text mt-1">투자 시작하기</p>
           </header>
           <div class="bg-white rounded-2xl p-6 w-full shadow-card">
             <form id="loginForm" class="flex flex-col gap-5">

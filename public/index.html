@@ -3,24 +3,33 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>My Life 투자 보드게임</title>
+  <title>My Life</title>
   <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
   <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="js/tailwind-config.js"></script>
-  <style>body { font-family: 'Hanken Grotesk', sans-serif; background-color: #F5F6F8; }</style>
+  <style>
+    body { font-family: 'Hanken Grotesk', sans-serif; background-color: #F5F6F8; }
+    @keyframes fadeUp { from{opacity:0; transform:translateY(12px)} to{opacity:1; transform:translateY(0)} }
+    .fadeup { animation: fadeUp 0.5s ease both; }
+  </style>
 </head>
 <body class="min-h-screen flex flex-col items-center justify-center p-5">
-  <main class="w-full max-w-[320px] flex flex-col items-center">
-    <header class="text-center mb-10">
-      <h1 class="text-[32px] font-bold text-on-surface tracking-tight">My Life</h1>
-      <p class="text-[14px] text-brand-gray-text mt-1">투자 보드게임</p>
-    </header>
-    <div class="flex flex-col gap-4 w-full">
-      <a href="player/" class="w-full h-[52px] bg-brand-blue text-white rounded-xl font-bold text-[16px] flex items-center justify-center hover:opacity-90 active:scale-[0.98] transition-all">참가자 입장</a>
-      <a href="master/" class="w-full h-[52px] bg-white text-on-surface border border-outline-variant rounded-xl font-bold text-[16px] flex items-center justify-center hover:bg-surface-container-low active:scale-[0.98] transition-all shadow-card">관리자</a>
+  <main class="w-full max-w-[320px] flex flex-col items-center text-center">
+    <img src="logo.png" alt="My Life" width="96" height="96" class="mb-4 fadeup" style="filter: drop-shadow(0 8px 20px rgba(49,130,246,0.15));">
+    <h1 class="text-[30px] font-bold text-on-surface tracking-tight fadeup" style="animation-delay:0.05s">My Life</h1>
+    <p class="text-[14px] text-brand-gray-text mt-1 fadeup" style="animation-delay:0.1s">트레이너</p>
+
+    <div class="flex flex-col gap-3 w-full mt-8 fadeup" style="animation-delay:0.15s">
+      <a href="master/" class="w-full h-[52px] bg-brand-blue text-white rounded-xl font-bold text-[16px] flex items-center justify-center hover:opacity-90 active:scale-[0.98] transition-all shadow-md shadow-blue-100">로그인</a>
     </div>
-    <footer class="mt-10 text-center">
-      <p class="text-[12px] text-outline-variant">© My Life 투자 보드게임</p>
+
+    <div class="mt-8 flex items-center gap-2 text-[12px] text-brand-gray-text fadeup" style="animation-delay:0.2s">
+      <span class="w-1.5 h-1.5 rounded-full bg-brand-green"></span>
+      참가자는 진행자가 안내한 QR 또는 링크로 입장하세요
+    </div>
+
+    <footer class="mt-10 fadeup" style="animation-delay:0.25s">
+      <p class="text-[12px] text-outline-variant">© My Life</p>
     </footer>
   </main>
 </body>

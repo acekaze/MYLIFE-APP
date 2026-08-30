@@ -32,7 +32,8 @@ const MasterApp = (() => {
     document.getElementById('app').innerHTML = `
       <div class="min-h-screen flex flex-col items-center justify-center p-5 bg-background">
         <main class="w-full max-w-[360px] flex flex-col items-center">
-          <header class="text-center mb-8">
+          <header class="text-center mb-8 flex flex-col items-center">
+            <img src="../logo.png" alt="My Life" width="80" height="80" class="mb-3" style="filter: drop-shadow(0 8px 20px rgba(49,130,246,0.15));">
             <h1 class="text-[28px] font-bold text-on-surface">My Life</h1>
             <p class="text-[14px] text-brand-gray-text mt-1">관리자 로그인</p>
           </header>
