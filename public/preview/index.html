@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UI 개선안 미리보기</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="../js/tailwind-config.js"></script>
+  <style>body { font-family: 'Hanken Grotesk', sans-serif; background:#F5F6F8; }</style>
+</head>
+<body class="min-h-screen p-6">
+  <div class="max-w-[900px] mx-auto">
+    <header class="text-center mb-8">
+      <h1 class="text-[28px] font-bold text-on-surface">UI 개선안 미리보기</h1>
+      <p class="text-brand-gray-text text-[14px] mt-1">실제 앱에는 아직 반영 안 됨. 비교용입니다.</p>
+    </header>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <a href="entry.html" class="bg-white rounded-2xl p-6 shadow-card hover:shadow-card-hover transition-shadow text-center">
+        <div class="text-[40px] mb-3">🚪</div>
+        <div class="font-bold text-[16px]">진입 페이지 개선안</div>
+        <div class="text-brand-gray-text text-[13px] mt-1">설명 문구 + 시각 앵커</div>
+      </a>
+      <a href="player.html" class="bg-white rounded-2xl p-6 shadow-card hover:shadow-card-hover transition-shadow text-center">
+        <div class="text-[40px] mb-3">📊</div>
+        <div class="font-bold text-[16px]">참가자 현황 개선안</div>
+        <div class="text-brand-gray-text text-[13px] mt-1">순수익 히어로 + 진행률</div>
+      </a>
+      <a href="../index.html" class="bg-white rounded-2xl p-6 shadow-card hover:shadow-card-hover transition-shadow text-center border-2 border-brand-gray-light">
+        <div class="text-[40px] mb-3">📱</div>
+        <div class="font-bold text-[16px]">현재 버전</div>
+        <div class="text-brand-gray-text text-[13px] mt-1">지금 배포된 화면</div>
+      </a>
+    </div>
+
+    <div class="bg-white rounded-2xl p-6 shadow-card mt-6">
+      <h2 class="font-bold text-[16px] mb-3">비교 포인트</h2>
+      <ul class="text-[14px] text-on-surface-variant space-y-2 list-disc pl-5">
+        <li><strong>진입 페이지</strong>: 게임 한 줄 설명, 심볼, 3가지 역할 안내 추가</li>
+        <li><strong>참가자 현황</strong>: 순수익을 화면 최상단 큰 숫자로, 턴 진행률 바, "지금 할 일" 안내</li>
+      </ul>
+    </div>
+  </div>
+</body>
+</html>
