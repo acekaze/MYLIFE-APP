@@ -6,7 +6,9 @@ const PlayerApp = (() => {
   let playerId = null;
   let playerName = '';
   let playerTeam = '';
+  let playerTeamName = '';
   let currentTurn = 0;
+  let maxTurns = 20;
 
   function init() {
     const params = new URLSearchParams(window.location.search);
@@ -142,14 +144,21 @@ const PlayerApp = (() => {
     db.ref(`sessions/${sessionId}/state`).on('value', snap => {
       const state = snap.val() || {};
       currentTurn = state.currentTurn || 1;
+      maxTurns = state.maxTurns || 20;
       renderMain(state.phase || 'investing');
     });
     db.ref(`sessions/${sessionId}/investments`).on('value', () => {
       db.ref(`sessions/${sessionId}/state`).once('value').then(snap => {
         const state = snap.val() || {};
         currentTurn = state.currentTurn || 1;
+        maxTurns = state.maxTurns || 20;
         renderMain(state.phase || 'investing');
       });
+    });
+    // 팀 이름 로드
+    db.ref(`sessions/${sessionId}/teams/${playerTeam}`).once('value').then(snap => {
+      const t = snap.val();
+      if (t) playerTeamName = t.name;
     });
   }
 
@@ -170,26 +179,37 @@ const PlayerApp = (() => {
       const netResult = totalProfit + totalLoss;
       const gameEnded = phase === 'ended';
 
+      const progressPct = Math.min(100, Math.round((currentTurn / maxTurns) * 100));
+
       document.getElementById('app').innerHTML = `
         <div class="w-full max-w-[390px] mx-auto min-h-screen bg-background relative">
           <!-- Header -->
           <header class="sticky top-0 w-full z-50 bg-brand-blue h-[56px] flex items-center justify-between px-4 shadow-sm">
-            <h1 class="text-white font-bold text-[17px]">My Life 투자</h1>
-            <span class="text-white font-medium text-[14px]">${playerName}</span>
+            <div class="flex items-center gap-2">
+              <img src="../logo.png" alt="" width="28" height="28" class="rounded-md bg-white/90 p-0.5">
+              <h1 class="text-white font-bold text-[17px]">My Life</h1>
+            </div>
+            <span class="text-white font-medium text-[14px]">${playerName}${playerTeamName ? ' · ' + playerTeamName : ''}</span>
           </header>
 
-          <!-- Status Strip -->
-          <div class="bg-white h-[44px] flex items-center justify-between px-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-            <div class="bg-brand-blue text-white text-xs font-bold rounded-full px-3 py-1">턴 ${currentTurn}</div>
-            <span class="text-brand-gray-text text-sm font-medium">${gameEnded ? '🏁 게임 종료' : phase === 'investing' ? '투자 접수 중' : '결과 정산 중'}</span>
+          <!-- 진행률 바 -->
+          <div class="bg-white px-4 py-3 shadow-sm">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-[13px] font-bold text-on-surface">턴 ${currentTurn} <span class="text-brand-gray-text font-normal">/ ${maxTurns}</span></span>
+              <span class="text-[12px] text-brand-gray-text">${gameEnded ? '🏁 게임 종료' : phase === 'investing' ? '투자 접수 중' : '결과 정산 중'}</span>
+            </div>
+            <div class="h-1.5 bg-surface-container rounded-full overflow-hidden">
+              <div class="h-full bg-brand-blue rounded-full transition-all" style="width:${progressPct}%"></div>
+            </div>
           </div>
 
           <!-- Content -->
           <main class="p-4 pb-20 space-y-4">
             ${gameEnded ? renderGameEndedMessage() : ''}
+            ${settled.length > 0 ? renderHeroSummary(investments.length, totalProfit, totalLoss, netResult) : ''}
             ${!gameEnded && myMatured.length > 0 ? renderDiceSection(myMatured) : ''}
+            ${!gameEnded && phase === 'investing' ? renderTodoBanner() : ''}
             ${!gameEnded && phase === 'investing' ? renderInvestForm() : ''}
-            ${renderStats(investments.length, active.length, totalProfit, totalLoss)}
             ${active.length > 0 ? renderActiveInvestments(active) : ''}
             ${settled.length > 0 ? renderSettledInvestments(settled, netResult) : ''}
           </main>
@@ -406,25 +426,40 @@ const PlayerApp = (() => {
   }
 
   // ===== STATS =====
-  function renderStats(total, activeCount, totalProfit, totalLoss) {
-    if (total === 0) return '';
+  // 순수익 히어로 (최상단 큰 숫자)
+  function renderHeroSummary(total, totalProfit, totalLoss, netResult) {
     return `
-      <div class="grid grid-cols-2 gap-3">
-        <div class="bg-white rounded-2xl p-5 flex flex-col items-center justify-center shadow-card">
-          <div class="text-[32px] font-bold text-on-surface">${total}</div>
-          <div class="text-brand-gray-text text-xs mt-1">총 투자</div>
+      <div class="bg-gradient-to-br from-white to-blue-50 rounded-2xl p-6 shadow-card text-center">
+        <div class="text-[13px] text-brand-gray-text mb-1">내 순수익</div>
+        <div class="text-[44px] font-bold ${netResult >= 0 ? 'text-brand-green' : 'text-brand-red'} leading-none">${netResult >= 0 ? '+' : ''}${formatAmount(netResult)}<span class="text-[18px] text-brand-gray-text font-medium ml-1">만 원</span></div>
+        <div class="flex justify-center gap-4 mt-4 pt-4 border-t border-brand-gray-light/60">
+          <div>
+            <div class="text-[16px] font-bold text-brand-green">+${formatAmount(totalProfit)}</div>
+            <div class="text-[11px] text-brand-gray-text">총 수익</div>
+          </div>
+          <div class="w-px bg-brand-gray-light"></div>
+          <div>
+            <div class="text-[16px] font-bold text-brand-red">${formatAmount(totalLoss)}</div>
+            <div class="text-[11px] text-brand-gray-text">총 손실</div>
+          </div>
+          <div class="w-px bg-brand-gray-light"></div>
+          <div>
+            <div class="text-[16px] font-bold text-on-surface">${total}</div>
+            <div class="text-[11px] text-brand-gray-text">투자 횟수</div>
+          </div>
         </div>
-        <div class="bg-white rounded-2xl p-5 flex flex-col items-center justify-center shadow-card">
-          <div class="text-[32px] font-bold text-brand-orange">${activeCount}</div>
-          <div class="text-brand-gray-text text-xs mt-1">진행중</div>
-        </div>
-        <div class="bg-white rounded-2xl p-5 flex flex-col items-center justify-center shadow-card">
-          <div class="text-[24px] font-bold text-brand-green">+${formatAmount(totalProfit)}</div>
-          <div class="text-brand-gray-text text-xs mt-1">총 수익</div>
-        </div>
-        <div class="bg-white rounded-2xl p-5 flex flex-col items-center justify-center shadow-card">
-          <div class="text-[24px] font-bold text-brand-red">${formatAmount(totalLoss)}</div>
-          <div class="text-brand-gray-text text-xs mt-1">총 손실</div>
+      </div>
+    `;
+  }
+
+  // 지금 할 일 안내
+  function renderTodoBanner() {
+    return `
+      <div class="bg-brand-blue/5 border border-brand-blue/15 rounded-2xl p-4 flex items-center gap-3">
+        <span class="text-[22px]">👉</span>
+        <div>
+          <div class="font-bold text-[14px] text-brand-blue">이번 턴, 투자할 상품을 골라보세요</div>
+          <div class="text-[12px] text-brand-gray-text mt-0.5">최소 500만 원부터 · 여러 번 투자 가능</div>
         </div>
       </div>
     `;
