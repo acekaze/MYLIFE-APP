@@ -198,6 +198,8 @@ const PlayerApp = (() => {
         if (inv.playerId === playerId) investments.push({ id: child.key, ...inv });
       });
       const bucketRecords = bucketSnap.val() || {};
+      const bucketTotals = getBucketTotals(bucketRecords);
+      const bucketRecordCount = Object.keys(bucketRecords).length;
 
       const myMatured = investments.filter(inv => inv.maturityTurn <= currentTurn && inv.result === 'pending');
       const active = investments.filter(inv => inv.result === 'pending');
@@ -233,6 +235,7 @@ const PlayerApp = (() => {
 
           <!-- Content -->
           <main class="p-4 pb-20 space-y-4">
+            ${renderBucketStatus(bucketTotals, bucketRecordCount)}
             ${gameEnded ? renderGameEndedMessage() : ''}
             ${settled.length > 0 ? renderHeroSummary(investments.length, totalProfit, totalLoss, netResult) : ''}
             ${!gameEnded && myMatured.length > 0 ? renderDiceSection(myMatured) : ''}
@@ -270,6 +273,21 @@ const PlayerApp = (() => {
       count: totals.count + (Number(record.bucketCount) || 0),
       score: totals.score + (Number(record.bucketScore) || 0),
     }), { count: 0, score: 0 });
+  }
+
+  function renderBucketStatus(totals, recordCount) {
+    return `
+      <section class="rounded-2xl bg-brand-purple-light/60 border border-brand-purple/15 p-4 shadow-card" aria-label="나의 버킷 현황">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="font-bold text-[16px] text-on-surface flex items-center gap-2"><span class="material-symbols-outlined text-brand-purple">workspace_premium</span>나의 버킷 현황</h2>
+          <span class="text-[12px] font-bold text-brand-purple">${recordCount}회 기록</span>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="rounded-xl bg-white/80 px-4 py-3"><p class="text-[12px] text-brand-gray-text">누적 개수</p><p class="mt-1 text-[22px] font-bold text-on-surface">${totals.count}<span class="ml-1 text-[13px] font-medium text-brand-gray-text">개</span></p></div>
+          <div class="rounded-xl bg-white/80 px-4 py-3"><p class="text-[12px] text-brand-gray-text">누적 점수</p><p class="mt-1 text-[22px] font-bold text-on-surface">${totals.score.toLocaleString('ko-KR')}<span class="ml-1 text-[13px] font-medium text-brand-gray-text">점</span></p></div>
+        </div>
+      </section>
+    `;
   }
 
   function showPreInvestmentNotice(bucketRecords, period) {

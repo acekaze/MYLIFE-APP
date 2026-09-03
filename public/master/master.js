@@ -385,6 +385,7 @@ const MasterApp = (() => {
     const investments = sessionData.investments || {};
     const teams = sessionData.teams || {};
     const skips = sessionData.skips || {};
+    const bucketRecords = sessionData.bucketRecords || {};
     const playerCount = Object.keys(players).length;
     const teamCount = Object.keys(teams).length;
     const investArr = Object.entries(investments).map(([id, inv]) => ({ id, ...inv }));
@@ -516,7 +517,7 @@ const MasterApp = (() => {
     const playerArr = Object.entries(players).map(([id, p]) => ({ id, ...p }));
 
     switch (currentTab) {
-      case 'dashboard': container.innerHTML = renderDashboard(state, teamArr, playerArr, investArr, thisTurnDone, pendingMaturity); bindDashboardEvents(state, playerArr, teamArr); break;
+      case 'dashboard': container.innerHTML = renderDashboard(state, teamArr, playerArr, investArr, thisTurnDone, pendingMaturity, bucketRecords); bindDashboardEvents(state, playerArr, teamArr); break;
       case 'maturity': container.innerHTML = renderMaturity(state, investArr); bindMaturityEvents(investArr); break;
       case 'worldevent': container.innerHTML = renderWorldEvent(investArr); bindWorldEventEvents(investArr); break;
       case 'all': container.innerHTML = renderAllRecords(investArr); break;
@@ -526,11 +527,28 @@ const MasterApp = (() => {
   }
 
   // ===== DASHBOARD =====
-  function renderDashboard(state, teamArr, playerArr, investArr, thisTurnDone, pendingMaturity) {
+  function renderDashboard(state, teamArr, playerArr, investArr, thisTurnDone, pendingMaturity, bucketRecords) {
+    const bucketByPlayer = playerArr.map(player => {
+      const records = Object.values(bucketRecords[player.id] || {});
+      return {
+        ...player,
+        recordCount: records.length,
+        bucketCount: records.reduce((sum, record) => sum + (Number(record.bucketCount) || 0), 0),
+        bucketScore: records.reduce((sum, record) => sum + (Number(record.bucketScore) || 0), 0),
+      };
+    });
+    const playersWithBucketRecords = bucketByPlayer.filter(player => player.recordCount > 0).length;
+    const totalBucketCount = bucketByPlayer.reduce((sum, player) => sum + player.bucketCount, 0);
+    const totalBucketScore = bucketByPlayer.reduce((sum, player) => sum + player.bucketScore, 0);
     const teamStatus = teamArr.map(team => {
       const members = playerArr.filter(p => p.teamId === team.id);
       const done = members.filter(p => thisTurnDone.has(p.id)).length;
-      return { ...team, total: members.length, done, allDone: members.length > 0 && done >= members.length };
+      const bucketMembers = bucketByPlayer.filter(p => p.teamId === team.id);
+      return {
+        ...team, total: members.length, done, allDone: members.length > 0 && done >= members.length,
+        bucketCount: bucketMembers.reduce((sum, player) => sum + player.bucketCount, 0),
+        bucketScore: bucketMembers.reduce((sum, player) => sum + player.bucketScore, 0),
+      };
     });
     const notDone = playerArr.filter(p => !thisTurnDone.has(p.id));
 
@@ -554,6 +572,32 @@ const MasterApp = (() => {
         </div>
       </div>
 
+      <!-- Bucket Status -->
+      <div class="bento-card mb-6 border border-brand-purple/15">
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-4">
+          <div>
+            <h3 class="font-bold text-[18px] flex items-center gap-2"><span class="material-symbols-outlined text-brand-purple">workspace_premium</span>버킷 현황</h3>
+            <p class="text-brand-gray-text text-[13px] mt-1">참가자가 입력한 누적 개수와 점수입니다.</p>
+          </div>
+          <span class="w-fit px-3 py-1 rounded-full bg-brand-purple-light text-brand-purple text-[12px] font-bold">${playersWithBucketRecords}/${playerArr.length}명 입력</span>
+        </div>
+        <div class="grid grid-cols-2 gap-3 mb-4">
+          <div class="rounded-xl bg-brand-purple-light/60 p-4"><p class="text-[12px] text-brand-gray-dark">전체 버킷 개수</p><p class="mt-1 text-[24px] font-bold">${totalBucketCount.toLocaleString('ko-KR')}<span class="ml-1 text-[13px] font-medium text-brand-gray-text">개</span></p></div>
+          <div class="rounded-xl bg-brand-purple-light/60 p-4"><p class="text-[12px] text-brand-gray-dark">전체 버킷 점수</p><p class="mt-1 text-[24px] font-bold">${totalBucketScore.toLocaleString('ko-KR')}<span class="ml-1 text-[13px] font-medium text-brand-gray-text">점</span></p></div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          ${bucketByPlayer.map(player => {
+            const teamName = teamArr.find(team => team.id === player.teamId)?.name || '';
+            return `
+              <div class="flex items-center justify-between rounded-xl border border-outline-variant bg-white p-4">
+                <div class="min-w-0"><div class="flex items-center gap-2"><span class="bg-brand-gray-light text-brand-gray-dark text-[11px] font-bold px-2 py-1 rounded">${teamName}</span><span class="font-medium truncate">${player.name}</span></div><p class="mt-1 text-[12px] text-brand-gray-text">${player.recordCount}회 기록</p></div>
+                <div class="text-right shrink-0"><p class="font-bold text-[15px]">${player.bucketCount.toLocaleString('ko-KR')}개</p><p class="mt-1 text-[12px] text-brand-purple font-bold">${player.bucketScore.toLocaleString('ko-KR')}점</p></div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+
       <!-- Team Status -->
       <div class="bento-card mb-6">
         <h3 class="font-bold text-[18px] mb-4">팀별 현황</h3>
@@ -566,6 +610,7 @@ const MasterApp = (() => {
               </div>
               <div class="flex items-center gap-4">
                 <span class="text-on-surface-variant">${t.done}/${t.total}명</span>
+                <span class="text-brand-purple text-[12px] font-bold">버킷 ${t.bucketCount}개 · ${t.bucketScore}점</span>
                 ${t.allDone ?
                   '<span class="px-3 py-1 rounded-full bg-brand-green-light text-brand-green text-[12px] font-bold">완료</span>' :
                   '<span class="px-3 py-1 rounded-full bg-brand-orange-light text-brand-orange text-[12px] font-bold">대기</span>'}
