@@ -387,9 +387,11 @@ const MasterApp = (() => {
     const skips = sessionData.skips || {};
     const bucketRecords = sessionData.bucketRecords || {};
     const finalCash = sessionData.finalCash || {};
+    const eventAdjustments = sessionData.eventAdjustments || {};
     const playerCount = Object.keys(players).length;
     const teamCount = Object.keys(teams).length;
     const investArr = Object.entries(investments).map(([id, inv]) => ({ id, ...inv }));
+    const adjustmentArr = Object.entries(eventAdjustments).map(([id, adjustment]) => ({ id, ...adjustment }));
 
     // 완료 카운트
     const thisTurnInvestors = new Set(investArr.filter(i => i.turn === state.currentTurn).map(i => i.playerId));
@@ -523,7 +525,7 @@ const MasterApp = (() => {
       case 'worldevent': container.innerHTML = renderWorldEvent(investArr); bindWorldEventEvents(investArr); break;
       case 'all': container.innerHTML = renderAllRecords(investArr); break;
       case 'teams': container.innerHTML = renderTeams(teamArr, playerArr); bindTeamEvents(); break;
-      case 'ranking': container.innerHTML = renderRanking(teamArr, playerArr, investArr, bucketRecords, finalCash); break;
+      case 'ranking': container.innerHTML = renderRanking(teamArr, playerArr, investArr, bucketRecords, finalCash, adjustmentArr); break;
     }
   }
 
@@ -730,7 +732,7 @@ const MasterApp = (() => {
           <span class="text-[24px]">⚡</span>
           <h2 class="font-bold text-[20px]">월드 이벤트</h2>
         </div>
-        <p class="text-brand-gray-text text-[14px] mb-6">이벤트 대상 종목을 선택하고, 대표 주사위를 굴려주세요.<br>해당 종목에 투자 중인 모든 참가자가 즉시 정산됩니다.</p>
+        <p class="text-brand-gray-text text-[14px] mb-6">대상 종목과 이벤트 효과를 선택하세요. 모든 이벤트는 히스토리에 남습니다.</p>
 
         <!-- 종목 선택 -->
         <div class="space-y-3 mb-6">
@@ -756,6 +758,27 @@ const MasterApp = (() => {
               </label>
             `;
           }).join('')}
+        </div>
+
+        <!-- 이벤트 효과 -->
+        <div class="mb-6">
+          <h3 class="font-bold text-[16px] mb-3">이벤트 효과</h3>
+          <div class="space-y-3">
+            <label class="flex gap-3 p-4 rounded-xl border border-outline-variant bg-white cursor-pointer has-[:checked]:border-brand-blue has-[:checked]:bg-brand-blue-light">
+              <input type="radio" name="worldEventEffect" value="diceSettlement" class="world-event-effect mt-0.5 w-5 h-5 text-brand-blue" checked>
+              <div><p class="font-bold text-[14px]">주사위 즉시 정산</p><p class="mt-1 text-[13px] text-brand-gray-text">대표 주사위 결과로 선택한 모든 투자를 즉시 정산합니다.</p></div>
+            </label>
+            <label class="flex gap-3 p-4 rounded-xl border border-outline-variant bg-white cursor-pointer has-[:checked]:border-brand-blue has-[:checked]:bg-brand-blue-light">
+              <input type="radio" name="worldEventEffect" value="recordOnly" class="world-event-effect mt-0.5 w-5 h-5 text-brand-blue">
+              <div><p class="font-bold text-[14px]">영향 없이 기록만</p><p class="mt-1 text-[13px] text-brand-gray-text">진행 중인 투자값은 바꾸지 않고 이벤트 발생 사실만 남깁니다.</p></div>
+            </label>
+            <label class="flex gap-3 p-4 rounded-xl border border-outline-variant bg-white cursor-pointer has-[:checked]:border-brand-blue has-[:checked]:bg-brand-blue-light">
+              <input type="radio" name="worldEventEffect" value="forcedLoss" class="world-event-effect mt-0.5 w-5 h-5 text-brand-blue">
+              <div class="flex-1"><p class="font-bold text-[14px]">강제 손실 적용</p><p class="mt-1 text-[13px] text-brand-gray-text">선택한 각 투자 건에 같은 손실액을 반영하고, 투자는 계속 진행합니다.</p>
+                <div id="worldEventLossOptions" class="hidden mt-3"><label class="text-[12px] font-medium text-brand-gray-dark">투자 건당 강제 손실액 (만 원)<input id="worldEventLossAmount" type="number" min="1" inputmode="numeric" class="mt-1 w-full h-[44px] rounded-xl border-outline-variant text-[15px] font-bold focus:border-brand-blue focus:ring-brand-blue" placeholder="0"></label></div>
+              </div>
+            </label>
+          </div>
         </div>
 
         <!-- 통합 주사위 영역 -->
@@ -801,7 +824,7 @@ const MasterApp = (() => {
           <button id="worldEventConfirmBtn" class="w-full h-[52px] bg-brand-red text-white rounded-xl font-bold text-[16px] active:scale-[0.98] transition-transform disabled:opacity-50 disabled:cursor-not-allowed" disabled>
             ⚡ 월드 이벤트 발동
           </button>
-          <p class="text-brand-gray-text text-[12px] mt-2 text-center">발동하면 선택한 종목의 모든 진행 중 투자가 즉시 정산됩니다.</p>
+          <p id="worldEventConfirmHint" class="text-brand-gray-text text-[12px] mt-2 text-center">발동하면 선택한 종목의 모든 진행 중 투자가 즉시 정산됩니다.</p>
         </div>
       </div>
 
@@ -819,20 +842,29 @@ const MasterApp = (() => {
       <div class="bento-card">
         <h3 class="font-bold text-[16px] mb-4">📋 이벤트 히스토리</h3>
         <div class="space-y-3">
-          ${sorted.map(ev => `
+          ${sorted.map(ev => {
+            const effectType = ev.effectType || 'diceSettlement';
+            const effectText = effectType === 'recordOnly' ? '영향 없이 기록' :
+              effectType === 'forcedLoss' ? `강제 손실 · 건당 -${formatAmount(ev.fixedLossAmount || 0)}만 원` :
+              `주사위 ${ev.dice} 즉시 정산`;
+            const affectedText = effectType === 'recordOnly' ? `${ev.targetCount || ev.affectedCount || 0}건 대상 · 정산 없음` :
+              effectType === 'forcedLoss' ? `${ev.affectedCount || 0}건 · 총 ${formatAmount(-(ev.totalLossAmount || 0))}만 원` :
+              `${ev.affectedCount || 0}건 정산`;
+            return `
             <div class="p-3 rounded-lg bg-surface-container-low">
               <div class="flex justify-between items-center">
                 <div>
                   <span class="font-bold text-[14px]">⚡ ${ev.productNames?.join(', ') || ''}</span>
                   <span class="text-brand-gray-text text-[12px] ml-2">턴 ${ev.turn}</span>
                 </div>
-                <span class="text-brand-gray-text text-[12px]">${ev.affectedCount || 0}명 정산</span>
+                <span class="text-brand-gray-text text-[12px]">${affectedText}</span>
               </div>
               <div class="text-[12px] text-brand-gray-text mt-1">
-                ${ev.results ? ev.results.map(r => `${r.productName}: 주사위 ${r.dice} → ${resultLabel(r.result)}`).join(' | ') : ''}
+                ${effectText}${effectType === 'diceSettlement' && ev.results ? ` · ${ev.results.map(r => `${r.productName}: ${resultLabel(r.result)}`).join(' | ')}` : ''}
               </div>
             </div>
-          `).join('')}
+            `;
+          }).join('')}
         </div>
       </div>
     `;
@@ -848,70 +880,91 @@ const MasterApp = (() => {
 
     let selectedProducts = {};
     let finalDice = null;
+    let effectType = 'diceSettlement';
+    let useManualDice = false;
+    const getSelectedIds = () => Object.keys(selectedProducts);
+    const getTargetCount = () => getSelectedIds().reduce((sum, pid) => sum + (byProduct[pid] || []).length, 0);
 
-    // 종목 체크박스
+    function resetDice() {
+      finalDice = null;
+      useManualDice = false;
+      document.getElementById('diceDisplay').style.display = 'none';
+      document.getElementById('diceResultPreview').classList.add('hidden');
+      document.querySelectorAll('.manual-dice').forEach(button => {
+        button.classList.remove('border-brand-blue', 'bg-brand-blue', 'text-white');
+        button.classList.add('border-outline-variant');
+      });
+    }
+
+    function updateWorldEventUI() {
+      const hasSelection = getSelectedIds().length > 0;
+      const needsDice = effectType === 'diceSettlement';
+      const lossAmount = Number(document.getElementById('worldEventLossAmount')?.value || 0);
+      document.getElementById('worldEventDiceArea').classList.toggle('hidden', !hasSelection || !needsDice || useManualDice);
+      document.getElementById('worldEventManualDice').classList.toggle('hidden', !hasSelection || !needsDice || !useManualDice);
+      document.getElementById('switchToManualBtn').classList.toggle('hidden', !hasSelection || !needsDice || useManualDice);
+      document.getElementById('worldEventLossOptions').classList.toggle('hidden', effectType !== 'forcedLoss');
+
+      const confirm = document.getElementById('worldEventConfirmBtn');
+      const hint = document.getElementById('worldEventConfirmHint');
+      confirm.disabled = !hasSelection || (needsDice && !finalDice) || (effectType === 'forcedLoss' && (!Number.isInteger(lossAmount) || lossAmount <= 0));
+      if (effectType === 'diceSettlement') {
+        confirm.textContent = '⚡ 주사위 정산 발동';
+        hint.textContent = '발동하면 선택한 종목의 모든 진행 중 투자가 즉시 정산됩니다.';
+      } else if (effectType === 'recordOnly') {
+        confirm.textContent = '⚡ 영향 없이 이벤트 기록';
+        hint.textContent = '선택한 투자값은 바꾸지 않고 이벤트 히스토리에만 남깁니다.';
+      } else {
+        confirm.textContent = '⚡ 강제 손실 적용';
+        hint.textContent = `선택한 ${getTargetCount()}건에 투자 건당 손실액을 적용하고, 투자는 계속 진행합니다.`;
+      }
+    }
+
     document.querySelectorAll('.world-event-product').forEach(cb => {
       cb.addEventListener('change', () => {
         if (cb.checked) selectedProducts[cb.dataset.productId] = true;
         else delete selectedProducts[cb.dataset.productId];
-        
-        const hasSelection = Object.keys(selectedProducts).length > 0;
-        document.getElementById('worldEventDiceArea').classList.toggle('hidden', !hasSelection);
-        document.getElementById('switchToManualBtn').classList.toggle('hidden', !hasSelection);
-        document.getElementById('worldEventConfirmBtn').disabled = true;
-        finalDice = null;
-        document.getElementById('diceDisplay').style.display = 'none';
-        document.getElementById('diceResultPreview').classList.add('hidden');
+        resetDice();
+        updateWorldEventUI();
       });
     });
+    document.querySelectorAll('.world-event-effect').forEach(radio => {
+      radio.addEventListener('change', () => {
+        effectType = radio.value;
+        resetDice();
+        updateWorldEventUI();
+      });
+    });
+    document.getElementById('worldEventLossAmount')?.addEventListener('input', updateWorldEventUI);
 
-    // 주사위 굴리기 버튼
     document.getElementById('rollDiceBtn')?.addEventListener('click', () => {
       const display = document.getElementById('diceDisplay');
       const btn = document.getElementById('rollDiceBtn');
       display.style.display = 'flex';
       btn.disabled = true;
       btn.textContent = '굴리는 중...';
-
       rollDiceWithAnimation(display, (value) => {
         finalDice = value;
         btn.disabled = false;
         btn.innerHTML = '🎲 다시 굴리기';
         showDiceResult(value);
-        document.getElementById('worldEventConfirmBtn').disabled = false;
+        updateWorldEventUI();
       });
     });
-
-    // 직접 지정 전환
-    document.getElementById('switchToManualBtn')?.addEventListener('click', () => {
-      document.getElementById('worldEventDiceArea').classList.add('hidden');
-      document.getElementById('worldEventManualDice').classList.remove('hidden');
-      document.getElementById('switchToManualBtn').classList.add('hidden');
-    });
-
-    document.getElementById('switchToRollBtn')?.addEventListener('click', () => {
-      document.getElementById('worldEventDiceArea').classList.remove('hidden');
-      document.getElementById('worldEventManualDice').classList.add('hidden');
-      document.getElementById('switchToManualBtn').classList.remove('hidden');
-    });
-
-    // 직접 지정 버튼
+    document.getElementById('switchToManualBtn')?.addEventListener('click', () => { useManualDice = true; updateWorldEventUI(); });
+    document.getElementById('switchToRollBtn')?.addEventListener('click', () => { useManualDice = false; updateWorldEventUI(); });
     document.querySelectorAll('.manual-dice').forEach(btn => {
       btn.addEventListener('click', () => {
         finalDice = parseInt(btn.dataset.dice);
-        document.querySelectorAll('.manual-dice').forEach(b => {
-          b.classList.remove('border-brand-blue', 'bg-brand-blue', 'text-white');
-          b.classList.add('border-outline-variant');
+        document.querySelectorAll('.manual-dice').forEach(button => {
+          button.classList.remove('border-brand-blue', 'bg-brand-blue', 'text-white');
+          button.classList.add('border-outline-variant');
         });
         btn.classList.remove('border-outline-variant');
         btn.classList.add('border-brand-blue', 'bg-brand-blue', 'text-white');
-        
-        const display = document.getElementById('diceDisplay');
-        display.style.display = 'flex';
-        display.textContent = finalDice;
-
+        useManualDice = false;
         showDiceResult(finalDice);
-        document.getElementById('worldEventConfirmBtn').disabled = false;
+        updateWorldEventUI();
       });
     });
 
@@ -920,68 +973,87 @@ const MasterApp = (() => {
       const text = document.getElementById('diceResultText');
       const list = document.getElementById('diceAffectedList');
       preview.classList.remove('hidden');
-
-      const pids = Object.keys(selectedProducts);
-      let totalAffected = 0;
-      let lines = [];
-
-      pids.forEach(pid => {
+      const lines = [];
+      getSelectedIds().forEach(pid => {
         const product = getProductById(pid);
         const result = judgeResult(product, dice);
         const count = (byProduct[pid] || []).length;
-        totalAffected += count;
         const colorCls = result === 'success' ? 'text-brand-green' : result === 'fail' ? 'text-brand-red' : 'text-brand-purple';
-        lines.push(`<div><span class="font-bold">${product.name}</span> → <span class="${colorCls} font-bold">${resultLabel(result)}</span> (${count}명)</div>`);
+        lines.push(`<div><span class="font-bold">${product.name}</span> → <span class="${colorCls} font-bold">${resultLabel(result)}</span> (${count}건)</div>`);
       });
-
-      text.innerHTML = `주사위 <span class="text-brand-blue text-[28px]">${dice}</span> · ${totalAffected}명 즉시 정산`;
+      text.innerHTML = `주사위 <span class="text-brand-blue text-[28px]">${dice}</span> · ${getTargetCount()}건 즉시 정산`;
       list.innerHTML = lines.join('');
     }
 
-    // 발동 버튼
     document.getElementById('worldEventConfirmBtn')?.addEventListener('click', () => {
-      if (!finalDice) return;
-      const pids = Object.keys(selectedProducts);
-      if (pids.length === 0) return;
+      const pids = getSelectedIds();
+      if (pids.length === 0 || (effectType === 'diceSettlement' && !finalDice)) return;
+      const fixedLossAmount = Number(document.getElementById('worldEventLossAmount')?.value || 0);
+      if (effectType === 'forcedLoss' && (!Number.isInteger(fixedLossAmount) || fixedLossAmount <= 0)) {
+        showToast('투자 건당 강제 손실액을 1만 원 이상 입력해 주세요');
+        return;
+      }
 
       const state = sessionData.state || {};
-      let affectedCount = 0;
-      const eventResults = [];
       const updates = {};
+      const eventKey = db.ref(`sessions/${sessionId}/worldEvents`).push().key;
+      const targets = pids.flatMap(pid => byProduct[pid] || []);
+      const productNames = pids.map(pid => getProductById(pid)?.name || pid);
+      const now = Date.now();
+      let eventData = { turn: state.currentTurn, effectType, productNames, targetCount: targets.length, createdAt: now };
 
-      pids.forEach(pid => {
-        const product = getProductById(pid);
-        if (!product) return;
-        const result = judgeResult(product, finalDice);
-        const targets = byProduct[pid] || [];
-
+      if (effectType === 'diceSettlement') {
+        const eventResults = [];
         targets.forEach(inv => {
+          const product = getProductById(inv.productId);
+          const result = judgeResult(product, finalDice);
           const calc = calculateResult(inv.amount, product, result);
           updates[`sessions/${sessionId}/investments/${inv.id}/diceValue`] = finalDice;
           updates[`sessions/${sessionId}/investments/${inv.id}/result`] = result;
           updates[`sessions/${sessionId}/investments/${inv.id}/profitAmount`] = calc.profitAmount;
           updates[`sessions/${sessionId}/investments/${inv.id}/lossAmount`] = calc.lossAmount;
           updates[`sessions/${sessionId}/investments/${inv.id}/preserveAmount`] = calc.preserveAmount;
-          updates[`sessions/${sessionId}/investments/${inv.id}/settledAt`] = Date.now();
+          updates[`sessions/${sessionId}/investments/${inv.id}/settledAt`] = now;
           updates[`sessions/${sessionId}/investments/${inv.id}/settledBy`] = 'worldEvent';
-          affectedCount++;
         });
+        pids.forEach(pid => {
+          const product = getProductById(pid);
+          eventResults.push({ productId: pid, productName: product.name, dice: finalDice, result: judgeResult(product, finalDice) });
+        });
+        eventData = { ...eventData, dice: finalDice, results: eventResults, affectedCount: targets.length };
+      } else if (effectType === 'forcedLoss') {
+        let totalLossAmount = 0;
+        targets.forEach(inv => {
+          const lossAmount = Math.min(fixedLossAmount, Number(inv.amount) || 0);
+          const adjustmentKey = db.ref(`sessions/${sessionId}/eventAdjustments`).push().key;
+          updates[`sessions/${sessionId}/eventAdjustments/${adjustmentKey}`] = {
+            eventId: eventKey, investmentId: inv.id, playerId: inv.playerId, playerName: inv.playerName,
+            productId: inv.productId, productName: inv.productName, amount: -lossAmount,
+            turn: state.currentTurn, createdAt: now,
+          };
+          totalLossAmount += lossAmount;
+        });
+        eventData = { ...eventData, fixedLossAmount, totalLossAmount, affectedCount: targets.length };
+      } else {
+        eventData = { ...eventData, affectedCount: 0 };
+      }
+      updates[`sessions/${sessionId}/worldEvents/${eventKey}`] = eventData;
 
-        eventResults.push({ productId: pid, productName: product.name, dice: finalDice, result });
-      });
-
-      const eventKey = db.ref(`sessions/${sessionId}/worldEvents`).push().key;
-      updates[`sessions/${sessionId}/worldEvents/${eventKey}`] = {
-        turn: state.currentTurn, dice: finalDice,
-        productNames: eventResults.map(r => r.productName),
-        results: eventResults, affectedCount, createdAt: Date.now(),
-      };
-
+      const confirm = document.getElementById('worldEventConfirmBtn');
+      confirm.disabled = true;
+      confirm.textContent = '저장 중...';
       db.ref().update(updates).then(() => {
-        showToast(`⚡ 월드 이벤트 발동! 주사위 ${finalDice} · ${affectedCount}건 정산`);
+        const message = effectType === 'diceSettlement' ? `주사위 ${finalDice} · ${targets.length}건 정산` :
+          effectType === 'forcedLoss' ? `${targets.length}건 강제 손실 적용` : `${targets.length}건 영향 없이 기록`;
+        showToast(`⚡ 월드 이벤트 발동! ${message}`);
         currentTab = 'worldevent';
+      }).catch(() => {
+        confirm.disabled = false;
+        updateWorldEventUI();
+        showToast('월드 이벤트를 저장하지 못했습니다. 다시 시도해 주세요');
       });
     });
+    updateWorldEventUI();
   }
 
   // ===== MATURITY =====
@@ -1299,15 +1371,17 @@ const MasterApp = (() => {
   }
 
   // ===== RANKING =====
-  function renderRanking(teamArr, playerArr, investments, bucketRecords, finalCash) {
+  function renderRanking(teamArr, playerArr, investments, bucketRecords, finalCash, eventAdjustments) {
     const settled = investments.filter(i => i.result && i.result !== 'pending');
     const playerStats = playerArr.map(p => {
       const myInv = investments.filter(i => i.playerId === p.id);
       const mySettled = myInv.filter(i => i.result && i.result !== 'pending');
       const bucketHistory = Object.values((bucketRecords || {})[p.id] || {});
       const finalCashRecord = (finalCash || {})[p.id];
+      const eventAdjustmentTotal = (eventAdjustments || []).filter(adjustment => adjustment.playerId === p.id)
+        .reduce((sum, adjustment) => sum + (Number(adjustment.amount) || 0), 0);
       const totalProfit = mySettled.reduce((s, i) => s + (i.profitAmount || 0), 0);
-      const totalLoss = mySettled.reduce((s, i) => s + (i.lossAmount || 0), 0);
+      const totalLoss = mySettled.reduce((s, i) => s + (i.lossAmount || 0), 0) + eventAdjustmentTotal;
       return {
         ...p, investCount: myInv.length, netProfit: totalProfit + totalLoss, totalLoss,
         totalAmount: myInv.reduce((s, i) => s + (i.amount || 0), 0),

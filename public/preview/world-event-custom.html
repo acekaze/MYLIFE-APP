@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>My Life · 커스텀 월드이벤트 샘플</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+  <script src="../js/tailwind-config.js"></script>
+  <style>
+    body { font-family: 'Hanken Grotesk', system-ui, sans-serif; background: #F5F6F8; }
+    .choice:has(input:checked) { border-color: #3182F6; background: #E8F4FD; }
+    .choice:has(input:checked) .choice-dot { border-color: #3182F6; background: #3182F6; box-shadow: inset 0 0 0 4px #fff; }
+    .product:has(input:checked) { border-color: #3182F6; background: #E8F4FD; }
+  </style>
+</head>
+<body class="min-h-screen text-on-surface antialiased">
+  <header class="h-16 bg-header-bg px-6 flex items-center justify-between shadow-sm"><span class="font-bold text-[18px] text-white">2026 신입사원 My Life</span><span class="text-brand-gray-text text-sm">코드: DEMO26 · 2팀 6명</span></header>
+  <div class="flex min-h-[calc(100vh-64px)]">
+    <aside class="hidden md:flex w-64 shrink-0 flex-col gap-2 border-r border-outline-variant/30 bg-white p-4"><p class="mb-4 px-2 text-[13px] text-brand-gray-text">Turn 8 · 투자 접수</p><div class="nav-item flex items-center gap-3 rounded-xl px-4 py-3 text-[14px] text-brand-gray-dark"><span class="material-symbols-outlined">analytics</span>현황</div><div class="nav-item flex items-center gap-3 rounded-xl px-4 py-3 text-[14px] text-brand-gray-dark"><span class="material-symbols-outlined">payments</span>만기 정산</div><div class="nav-item flex items-center gap-3 rounded-xl bg-primary-container px-4 py-3 text-[14px] font-bold text-white"><span class="material-symbols-outlined">bolt</span>월드 이벤트</div><div class="nav-item flex items-center gap-3 rounded-xl px-4 py-3 text-[14px] text-brand-gray-dark"><span class="material-symbols-outlined">history</span>전체 내역</div></aside>
+    <main class="flex-1 p-4 sm:p-6"><div class="mx-auto max-w-[900px]">
+      <section class="rounded-2xl bg-white p-5 sm:p-6 shadow-card">
+        <div class="mb-6 flex items-start gap-3"><div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-orange-light text-[24px]">⚡</div><div><h1 class="text-[20px] font-bold">커스텀 월드이벤트</h1><p class="mt-1 text-[14px] text-brand-gray-text">대상 종목과 이벤트 효과를 선택합니다. 이벤트는 모두 히스토리에 남습니다.</p></div></div>
+
+        <section class="mb-6"><h2 class="mb-3 text-[15px] font-bold">1. 대상 종목</h2><div class="grid gap-3 sm:grid-cols-2">
+          <label class="product flex cursor-pointer items-center justify-between rounded-xl border border-outline-variant bg-white p-4"><div class="flex items-center gap-3"><input class="h-5 w-5 rounded border-outline-variant text-brand-blue focus:ring-brand-blue" type="checkbox" checked><div><p class="font-bold">주식형펀드</p><p class="mt-1 text-[12px] text-brand-gray-text">3건 진행 중</p></div></div><span class="rounded-full bg-brand-green-light px-2 py-1 text-[11px] font-bold text-brand-green">+8%</span></label>
+          <label class="product flex cursor-pointer items-center justify-between rounded-xl border border-outline-variant bg-white p-4"><div class="flex items-center gap-3"><input class="h-5 w-5 rounded border-outline-variant text-brand-blue focus:ring-brand-blue" type="checkbox" checked><div><p class="font-bold">고위험ETF</p><p class="mt-1 text-[12px] text-brand-gray-text">2건 진행 중</p></div></div><span class="rounded-full bg-brand-green-light px-2 py-1 text-[11px] font-bold text-brand-green">+20%</span></label>
+        </div></section>
+
+        <section class="mb-6"><h2 class="mb-3 text-[15px] font-bold">2. 이벤트 효과</h2><div class="space-y-3">
+          <label class="choice flex cursor-pointer gap-3 rounded-xl border border-outline-variant bg-white p-4 transition-colors"><input class="sr-only" type="radio" name="effect" value="dice"><span class="choice-dot mt-0.5 flex h-5 w-5 shrink-0 rounded-full border-2 border-outline-variant"></span><div><p class="font-bold text-[14px]">주사위 즉시 정산</p><p class="mt-1 text-[13px] leading-5 text-brand-gray-text">대표 주사위 결과로 선택한 모든 투자를 즉시 끝냅니다.</p></div></label>
+          <label class="choice flex cursor-pointer gap-3 rounded-xl border border-outline-variant bg-white p-4 transition-colors"><input class="sr-only" type="radio" name="effect" value="none"><span class="choice-dot mt-0.5 flex h-5 w-5 shrink-0 rounded-full border-2 border-outline-variant"></span><div><p class="font-bold text-[14px]">영향 없이 기록만</p><p class="mt-1 text-[13px] leading-5 text-brand-gray-text">진행 중인 투자값은 바꾸지 않고, 이벤트 발생 사실만 남깁니다.</p></div></label>
+          <label class="choice flex cursor-pointer gap-3 rounded-xl border border-outline-variant bg-white p-4 transition-colors"><input class="sr-only" type="radio" name="effect" value="loss" checked><span class="choice-dot mt-0.5 flex h-5 w-5 shrink-0 rounded-full border-2 border-outline-variant"></span><div class="min-w-0 flex-1"><p class="font-bold text-[14px]">강제 손실 적용</p><p class="mt-1 text-[13px] leading-5 text-brand-gray-text">선택한 각 투자 건에 같은 손실액을 반영하고, 투자는 계속 진행합니다.</p><div id="lossOptions" class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto] sm:items-end"><label class="block text-[12px] font-medium text-brand-gray-dark">투자 건당 강제 손실액 (만 원)<input id="lossAmount" type="number" min="0" value="200" class="mt-1 h-11 w-full rounded-xl border border-outline-variant bg-white px-3 text-[15px] font-bold focus:border-brand-blue focus:ring-brand-blue"></label><p class="rounded-xl bg-brand-red-light px-3 py-3 text-[12px] font-bold text-brand-red">5건 · 총 -1,000만 원</p></div></div></label>
+        </div></section>
+
+        <section id="preview" class="mb-6 rounded-xl border border-brand-orange/20 bg-brand-orange-light/50 p-4"><div class="flex items-center justify-between gap-3"><div><p class="text-[12px] font-bold text-brand-orange">발동 전 요약</p><p id="previewText" class="mt-1 text-[14px] font-bold">주식형펀드·고위험ETF 5건에 건당 -200만 원을 적용합니다.</p></div><span id="previewBadge" class="shrink-0 rounded-full bg-brand-red px-3 py-1.5 text-[12px] font-bold text-white">투자 계속</span></div></section>
+
+        <button id="confirm" class="h-13 w-full rounded-xl bg-brand-red px-5 py-3 text-[16px] font-bold text-white active:scale-[.98]">⚡ 커스텀 월드이벤트 발동</button>
+        <p class="mt-3 text-center text-[12px] text-brand-gray-text">발동 전 선택한 대상·효과·손실액을 다시 확인하세요.</p>
+      </section>
+      <section class="mt-6 rounded-2xl bg-white p-5 shadow-card"><h2 class="mb-4 text-[16px] font-bold">📋 이벤트 히스토리 예시</h2><div class="rounded-xl bg-surface-container-low p-4"><div class="flex items-center justify-between"><p class="font-bold text-[14px]">⚡ 주식형펀드</p><span class="text-[12px] text-brand-gray-text">턴 6</span></div><p class="mt-1 text-[12px] text-brand-gray-text">영향 없이 기록만 · 정산 0건</p></div></section>
+    </div></main>
+  </div>
+  <script>
+    const radios = document.querySelectorAll('input[name="effect"]');
+    const lossOptions = document.getElementById('lossOptions');
+    const previewText = document.getElementById('previewText');
+    const previewBadge = document.getElementById('previewBadge');
+    const lossAmount = document.getElementById('lossAmount');
+    function updatePreview() {
+      const effect = document.querySelector('input[name="effect"]:checked').value;
+      lossOptions.classList.toggle('hidden', effect !== 'loss');
+      if (effect === 'dice') { previewText.textContent = '선택한 2개 종목, 5건을 대표 주사위로 즉시 정산합니다.'; previewBadge.textContent = '즉시 정산'; previewBadge.className = 'shrink-0 rounded-full bg-brand-orange px-3 py-1.5 text-[12px] font-bold text-white'; }
+      if (effect === 'none') { previewText.textContent = '선택한 종목의 투자값은 바꾸지 않고 이벤트 기록만 남깁니다.'; previewBadge.textContent = '정산 없음'; previewBadge.className = 'shrink-0 rounded-full bg-brand-gray-dark px-3 py-1.5 text-[12px] font-bold text-white'; }
+      if (effect === 'loss') { const amount = Number(lossAmount.value || 0).toLocaleString('ko-KR'); previewText.textContent = `주식형펀드·고위험ETF 5건에 건당 -${amount}만 원을 적용합니다.`; previewBadge.textContent = '투자 계속'; previewBadge.className = 'shrink-0 rounded-full bg-brand-red px-3 py-1.5 text-[12px] font-bold text-white'; }
+    }
+    radios.forEach(radio => radio.addEventListener('change', updatePreview));
+    lossAmount.addEventListener('input', updatePreview);
+    document.getElementById('confirm').addEventListener('click', () => alert('샘플입니다. 실제 앱에는 아직 반영하지 않았습니다.'));
+    updatePreview();
+  </script>
+</body>
+</html>

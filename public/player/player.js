@@ -171,6 +171,14 @@ const PlayerApp = (() => {
         renderMain(state.phase || 'investing');
       });
     });
+    db.ref(`sessions/${sessionId}/eventAdjustments`).on('value', () => {
+      db.ref(`sessions/${sessionId}/state`).once('value').then(snap => {
+        const state = snap.val() || {};
+        currentTurn = state.currentTurn || 1;
+        maxTurns = state.maxTurns || 20;
+        renderMain(state.phase || 'investing');
+      });
+    });
     // 팀 이름 로드
     db.ref(`sessions/${sessionId}/teams/${playerTeam}`).once('value').then(snap => {
       const t = snap.val();
@@ -191,7 +199,8 @@ const PlayerApp = (() => {
       db.ref(`sessions/${sessionId}/preInvestmentChecks/${preInvestKey}`).once('value'),
       db.ref(`sessions/${sessionId}/bucketRecords/${playerId}`).once('value'),
       db.ref(`sessions/${sessionId}/finalCash/${playerId}`).once('value'),
-    ]).then(([investmentSnap, preInvestSnap, bucketSnap, finalCashSnap]) => {
+      db.ref(`sessions/${sessionId}/eventAdjustments`).once('value'),
+    ]).then(([investmentSnap, preInvestSnap, bucketSnap, finalCashSnap, adjustmentSnap]) => {
       if (renderTurn !== currentTurn) return;
       const investments = [];
       investmentSnap.forEach(child => {
@@ -200,6 +209,11 @@ const PlayerApp = (() => {
       });
       const bucketRecords = bucketSnap.val() || {};
       const finalCash = finalCashSnap.val();
+      const adjustments = [];
+      adjustmentSnap.forEach(child => {
+        const adjustment = child.val();
+        if (adjustment.playerId === playerId) adjustments.push({ id: child.key, ...adjustment });
+      });
       const bucketTotals = getBucketTotals(bucketRecords);
       const bucketRecordCount = Object.keys(bucketRecords).length;
 
@@ -208,7 +222,8 @@ const PlayerApp = (() => {
       const settled = investments.filter(inv => inv.result && inv.result !== 'pending');
       const totalProfit = settled.reduce((s, i) => s + (i.profitAmount || 0), 0);
       const totalLoss = settled.reduce((s, i) => s + (i.lossAmount || 0), 0);
-      const netResult = totalProfit + totalLoss;
+      const eventAdjustmentTotal = adjustments.reduce((sum, adjustment) => sum + (Number(adjustment.amount) || 0), 0);
+      const netResult = totalProfit + totalLoss + eventAdjustmentTotal;
       const gameEnded = phase === 'ended';
 
       const progressPct = Math.min(100, Math.round((currentTurn / maxTurns) * 100));
@@ -239,11 +254,12 @@ const PlayerApp = (() => {
           <main class="p-4 pb-20 space-y-4">
             ${renderBucketStatus(bucketTotals, bucketRecordCount)}
             ${gameEnded ? renderGameEndedMessage(finalCash) : ''}
-            ${settled.length > 0 ? renderHeroSummary(investments.length, totalProfit, totalLoss, netResult) : ''}
+            ${settled.length > 0 || adjustments.length > 0 ? renderHeroSummary(investments.length, totalProfit, totalLoss + eventAdjustmentTotal, netResult) : ''}
             ${!gameEnded && myMatured.length > 0 ? renderDiceSection(myMatured) : ''}
             ${!gameEnded && phase === 'investing' ? renderTodoBanner() : ''}
             ${!gameEnded && phase === 'investing' ? renderInvestForm() : ''}
             ${active.length > 0 ? renderActiveInvestments(active) : ''}
+            ${adjustments.length > 0 ? renderEventAdjustments(adjustments) : ''}
             ${settled.length > 0 ? renderSettledInvestments(settled, netResult) : ''}
           </main>
         </div>
@@ -638,6 +654,22 @@ const PlayerApp = (() => {
             <div class="text-[16px] font-bold text-on-surface">${total}</div>
             <div class="text-[11px] text-brand-gray-text">투자 횟수</div>
           </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderEventAdjustments(adjustments) {
+    return `
+      <div class="bg-brand-red-light/50 rounded-2xl p-5 shadow-card border border-brand-red/15">
+        <h2 class="font-bold text-[16px] text-on-surface mb-3">⚡ 월드이벤트 손익</h2>
+        <div class="space-y-3">
+          ${adjustments.map((adjustment, index) => `
+            <div class="flex justify-between items-center ${index < adjustments.length - 1 ? 'pb-3 border-b border-brand-red/15' : ''}">
+              <div><div class="font-medium text-[14px]">${adjustment.productName || '투자 상품'}</div><div class="text-[12px] text-brand-gray-text mt-0.5">턴 ${adjustment.turn || '-'} · 강제 손실</div></div>
+              <div class="font-bold text-[15px] text-brand-red">${formatAmount(adjustment.amount)}만 원</div>
+            </div>
+          `).join('')}
         </div>
       </div>
     `;
