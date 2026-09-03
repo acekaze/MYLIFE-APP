@@ -77,6 +77,10 @@ sessions/{CODE}/
     settledBy                 # 'worldEvent' | 'gameEnd' | (없으면 일반)
     createdAt, settledAt
   skips/{turn}_{playerId}/    # 해당 턴 '투자 안 함' 기록
+  preInvestmentChecks/{turn}_{playerId}/
+    playerId, turn, completedAt  # 투자 전 단계 완료 확인
+  bucketRecords/{playerId}/{period}/
+    period, turn, bucketCount, bucketScore, updatedAt  # 4턴 단위 버킷 기록
   worldEvents/{eventId}/      # 월드이벤트 기록
 
 trainers/{base64(name_pin)}/
@@ -117,6 +121,7 @@ trainers/{base64(name_pin)}/
 - 만기 도래 시 주사위 굴리기(직접 선택 또는 랜덤 애니메이션+사운드)
 - 진행 중/완료 투자 목록, "내 결과 공유하기"(개인 지표만, 순위 없음)
 - 연출: 성공 축하(색종이), 턴 전환("턴 N"), 게임 종료("당신의 5년")
+- 투자 진입: 매 턴 앞선 게임 진행 순서를 안내하고, 4·8·12·16·20턴에는 버킷 개수·점수를 함께 저장
 
 ### 관리자 (`master/master.js`)
 - 로그인 → 세션 목록(전체/본인) + 트레이너 승인 관리 + 세션 삭제/종료세션 일괄정리

@@ -180,12 +180,24 @@ const PlayerApp = (() => {
 
   // ===== MAIN RENDER =====
   function renderMain(phase) {
-    db.ref(`sessions/${sessionId}/investments`).once('value').then(snap => {
+    const renderTurn = currentTurn;
+    const preInvestKey = `${renderTurn}_${playerId}`;
+    const currentPeriod = Math.ceil(renderTurn / 4);
+    const existingModal = document.getElementById('preInvestModal');
+    if (existingModal) existingModal.remove();
+
+    Promise.all([
+      db.ref(`sessions/${sessionId}/investments`).once('value'),
+      db.ref(`sessions/${sessionId}/preInvestmentChecks/${preInvestKey}`).once('value'),
+      db.ref(`sessions/${sessionId}/bucketRecords/${playerId}`).once('value'),
+    ]).then(([investmentSnap, preInvestSnap, bucketSnap]) => {
+      if (renderTurn !== currentTurn) return;
       const investments = [];
-      snap.forEach(child => {
+      investmentSnap.forEach(child => {
         const inv = child.val();
         if (inv.playerId === playerId) investments.push({ id: child.key, ...inv });
       });
+      const bucketRecords = bucketSnap.val() || {};
 
       const myMatured = investments.filter(inv => inv.maturityTurn <= currentTurn && inv.result === 'pending');
       const active = investments.filter(inv => inv.result === 'pending');
@@ -235,6 +247,10 @@ const PlayerApp = (() => {
       if (!gameEnded && phase === 'investing') bindInvestForm();
       if (!gameEnded && myMatured.length > 0) bindDice(myMatured);
       if (settled.length > 0) bindShareResult();
+
+      if (!gameEnded && phase === 'investing' && !preInvestSnap.exists()) {
+        showPreInvestmentNotice(bucketRecords, currentPeriod);
+      }
     });
   }
 
@@ -244,8 +260,99 @@ const PlayerApp = (() => {
         <div class="text-[40px] mb-3">🏁</div>
         <h2 class="font-bold text-[18px] mb-2">게임이 종료되었습니다</h2>
         <p class="text-brand-gray-text text-[14px]">모든 투자가 정산되었습니다.<br>아래에서 최종 결과를 확인하세요.</p>
+        <p class="text-brand-gray-text text-[13px] mt-3">버킷 기록은 최종 결과에 포함됩니다.</p>
       </div>
     `;
+  }
+
+  function getBucketTotals(bucketRecords) {
+    return Object.values(bucketRecords || {}).reduce((totals, record) => ({
+      count: totals.count + (Number(record.bucketCount) || 0),
+      score: totals.score + (Number(record.bucketScore) || 0),
+    }), { count: 0, score: 0 });
+  }
+
+  function showPreInvestmentNotice(bucketRecords, period) {
+    if (document.getElementById('preInvestModal')) return;
+
+    const isQuarterTurn = currentTurn % 4 === 0;
+    const hasCurrentRecord = Boolean(bucketRecords[String(period)]);
+    const totals = getBucketTotals(bucketRecords);
+    const modal = document.createElement('div');
+    modal.id = 'preInvestModal';
+    modal.innerHTML = `
+      <div style="position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:9998; display:flex; align-items:flex-end; justify-content:center;" role="dialog" aria-modal="true" aria-labelledby="preInvestTitle">
+        <section style="background:#fff; width:100%; max-width:390px; max-height:88vh; overflow-y:auto; border-radius:16px 16px 0 0; padding:16px 20px 28px; box-shadow:0 -8px 28px rgba(0,0,0,0.18);">
+          <div style="width:40px; height:6px; margin:0 auto 16px; border-radius:999px; background:#E5E8EB;"></div>
+          <p style="color:#3182F6; font-size:13px; font-weight:700; margin:0;">투자 전 순서</p>
+          <h2 id="preInvestTitle" style="font-size:20px; line-height:28px; font-weight:700; margin:4px 0 16px;">앞 단계를 마친 뒤 투자하세요</h2>
+          <ol style="list-style:none; margin:0 0 16px; padding:0; display:grid; gap:10px; font-size:13px; color:#191c1e;">
+            ${['돈과 시간 수령', '버킷리스트 채우기', '업무능력 투자 결정', '버킷리스트 이룰지 결정', '버킷리스트 버릴 것 결정', '상품 투자'].map((step, index) => `
+              <li style="display:flex; align-items:center; gap:12px; ${index === 5 ? 'font-weight:700; color:#3182F6;' : ''}">
+                <span style="display:inline-flex; width:24px; height:24px; align-items:center; justify-content:center; border-radius:999px; font-size:11px; font-weight:700; ${index === 5 ? 'background:#3182F6; color:#fff;' : 'background:#F2F4F6; color:#4E5968;'}">${index + 1}</span>
+                ${step}
+              </li>
+            `).join('')}
+          </ol>
+          ${isQuarterTurn && !hasCurrentRecord ? `
+            <div style="margin:0 0 16px; padding:16px; border:1px solid rgba(139,92,246,.2); border-radius:12px; background:rgba(237,233,254,.5);">
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                <h3 style="font-size:14px; font-weight:700; margin:0;">${period}년차 버킷 기록</h3>
+                <span style="font-size:12px; font-weight:700; color:#8B5CF6;">현재 누적 ${totals.count}개 · ${totals.score}점</span>
+              </div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px;">
+                <label style="display:block; font-size:12px; font-weight:500; color:#4E5968;">이번에 이룬 개수
+                  <input id="bucketCountInput" type="number" min="0" inputmode="numeric" required style="box-sizing:border-box; width:100%; height:48px; margin-top:6px; padding:0 12px; border:1px solid #E5E8EB; border-radius:12px; background:#fff; font-size:15px;" placeholder="0">
+                </label>
+                <label style="display:block; font-size:12px; font-weight:500; color:#4E5968;">이번 버킷 점수
+                  <input id="bucketScoreInput" type="number" min="0" inputmode="numeric" required style="box-sizing:border-box; width:100%; height:48px; margin-top:6px; padding:0 12px; border:1px solid #E5E8EB; border-radius:12px; background:#fff; font-size:15px;" placeholder="0">
+                </label>
+              </div>
+            </div>
+          ` : ''}
+          <button id="startInvestingBtn" type="button" style="width:100%; height:48px; border:0; border-radius:12px; background:#3182F6; color:#fff; font-size:15px; font-weight:700; cursor:pointer;">앞 단계 완료 · 투자 시작</button>
+        </section>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    const focusTarget = document.getElementById(isQuarterTurn && !hasCurrentRecord ? 'bucketCountInput' : 'startInvestingBtn');
+    if (focusTarget) focusTarget.focus();
+
+    document.getElementById('startInvestingBtn').addEventListener('click', () => {
+      const updates = {
+        [`sessions/${sessionId}/preInvestmentChecks/${currentTurn}_${playerId}`]: {
+          playerId, turn: currentTurn, completedAt: Date.now(),
+        },
+      };
+
+      if (isQuarterTurn && !hasCurrentRecord) {
+        const countInput = document.getElementById('bucketCountInput');
+        const scoreInput = document.getElementById('bucketScoreInput');
+        if (countInput.value === '' || scoreInput.value === '') {
+          showToast('버킷 개수와 점수를 입력해 주세요');
+          return;
+        }
+        const count = Number(countInput.value);
+        const score = Number(scoreInput.value);
+        if (!Number.isInteger(count) || count < 0 || !Number.isInteger(score) || score < 0) {
+          showToast('버킷 개수와 점수를 0 이상으로 입력해 주세요');
+          return;
+        }
+        updates[`sessions/${sessionId}/bucketRecords/${playerId}/${period}`] = {
+          period, turn: currentTurn, bucketCount: count, bucketScore: score, updatedAt: Date.now(),
+        };
+      }
+
+      const startButton = document.getElementById('startInvestingBtn');
+      startButton.disabled = true;
+      startButton.textContent = '저장 중...';
+      db.ref().update(updates).then(() => modal.remove()).catch(() => {
+        startButton.disabled = false;
+        startButton.textContent = '앞 단계 완료 · 투자 시작';
+        showToast('저장하지 못했습니다. 다시 시도해 주세요');
+      });
+    });
   }
 
   function showGameEndEffect() {

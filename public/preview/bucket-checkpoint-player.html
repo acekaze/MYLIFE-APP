@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Life · 참가자 버킷 입력 샘플</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+  <script src="../js/tailwind-config.js"></script>
+  <style>
+    body { font-family: 'Hanken Grotesk', system-ui, sans-serif; background: #e9edf3; }
+    .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+    .custom-input { height: 52px; border-radius: 12px; background: #F5F6F8; border: 1px solid transparent; padding: 0 16px; width: 100%; color: #191c1e; font-size: 16px; }
+    .custom-input:focus { outline: none; border-color: #8B5CF6; background: #fff; box-shadow: 0 0 0 4px rgba(139,92,246,.12); }
+    .mode-switch button[aria-pressed="true"] { background: #fff; color: #4e2bb8; box-shadow: 0 1px 3px rgba(0,0,0,.10); }
+  </style>
+</head>
+<body class="min-h-screen text-on-surface antialiased">
+  <div class="mx-auto min-h-screen max-w-[390px] bg-background relative shadow-xl">
+    <header class="sticky top-0 z-20 flex h-14 items-center justify-between bg-brand-blue px-4 shadow-sm">
+      <div class="flex items-center gap-2"><img src="../logo.png" alt="" width="28" height="28" class="rounded-md bg-white/90 p-0.5"><h1 class="text-[17px] font-bold text-white">My Life</h1></div>
+      <span class="text-[14px] font-medium text-white">김민지 · 1조</span>
+    </header>
+
+    <section class="bg-white px-4 py-3 shadow-sm">
+      <div class="mb-2 flex items-center justify-between"><span class="text-[13px] font-bold">턴 <span id="turnNumber">4</span> <span class="font-normal text-brand-gray-text">/ 20</span></span><span id="phaseLabel" class="text-[12px] text-brand-gray-text">투자 접수 중</span></div>
+      <div class="h-1.5 overflow-hidden rounded-full bg-surface-container"><div id="progressBar" class="h-full w-1/5 rounded-full bg-brand-blue"></div></div>
+    </section>
+
+    <main class="space-y-4 p-4 pb-10">
+      <div class="flex justify-center">
+        <div class="mode-switch inline-flex rounded-xl bg-brand-purple-light p-1 text-[12px] font-bold text-brand-gray-dark" aria-label="샘플 상태 선택">
+          <button type="button" data-mode="year" aria-pressed="true" class="rounded-lg px-3 py-2 transition-colors">4턴 종료</button>
+          <button type="button" data-mode="final" aria-pressed="false" class="rounded-lg px-3 py-2 transition-colors">20턴 입력</button>
+        </div>
+      </div>
+
+      <section id="bucketPrompt" class="rounded-2xl border border-brand-purple/20 bg-white p-4 shadow-card" aria-labelledby="bucketTitle">
+        <div class="flex gap-3">
+          <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-purple-light text-brand-purple"><span class="material-symbols-outlined">workspace_premium</span></div>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center justify-between gap-2"><h2 id="bucketTitle" class="text-[16px] font-bold">1년차 버킷 기록</h2><span id="bucketStatus" class="shrink-0 rounded-full bg-brand-purple-light px-2 py-1 text-[11px] font-bold text-brand-purple">입력 전</span></div>
+            <p id="bucketDescription" class="mt-1 text-[13px] leading-5 text-brand-gray-dark">이번 1년 동안 이룬 버킷 개수와 점수를 적어 주세요.</p>
+            <p id="bucketTotal" class="mt-2 text-[12px] font-bold text-brand-purple">현재 누적 3개 · 120점</p>
+            <button id="openEntry" type="button" class="mt-3 h-10 w-full rounded-xl bg-brand-purple text-[14px] font-bold text-white active:scale-[.98]">버킷 기록 입력</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="endCard" class="hidden rounded-2xl bg-white p-6 text-center shadow-card">
+        <div class="mb-3 text-[40px]">🏁</div>
+        <h2 class="text-[20px] font-bold">당신의 5년</h2>
+        <p class="mt-2 text-[14px] leading-6 text-brand-gray-dark">버킷 기록은 최종 결과에 포함됩니다.</p>
+      </section>
+
+      <section id="investCard" class="rounded-2xl bg-white p-4 shadow-card">
+        <h2 class="mb-3 text-[16px] font-bold">투자할 상품을 선택하세요</h2>
+        <div class="grid grid-cols-2 gap-3">
+          <button type="button" class="rounded-xl border-2 border-transparent bg-white p-4 text-left shadow-card h-[180px] flex flex-col justify-between">
+            <div><h3 class="text-[15px] font-bold leading-tight">채권형펀드</h3><p class="mt-1 text-[12px] text-on-surface-variant">안정적인 수익을 추구해요</p></div>
+            <div><span class="rounded-full bg-brand-green-light px-2 py-0.5 text-[11px] font-bold text-brand-green">+8%</span><p class="mt-2 text-[10px] text-on-surface-variant">성공 <b class="text-brand-green">1,2,3,5,6</b> · 보존 <b class="text-brand-purple">4</b></p><p class="mt-2 border-t border-surface-variant pt-2 text-[11px] text-outline">최소 500만 원</p></div>
+          </button>
+          <button type="button" class="rounded-xl border-2 border-transparent bg-white p-4 text-left shadow-card h-[180px] flex flex-col justify-between">
+            <div><h3 class="text-[15px] font-bold leading-tight">주식형펀드</h3><p class="mt-1 text-[12px] text-on-surface-variant">성장 가능성을 함께 봐요</p></div>
+            <div><span class="rounded-full bg-brand-green-light px-2 py-0.5 text-[11px] font-bold text-brand-green">+16%</span> <span class="rounded-full bg-brand-red-light px-2 py-0.5 text-[11px] font-bold text-brand-red">-20%</span><p class="mt-2 text-[10px] text-on-surface-variant">성공 <b class="text-brand-green">1,2,3,6</b> · 보존 <b class="text-brand-purple">4</b></p><p class="mt-2 border-t border-surface-variant pt-2 text-[11px] text-outline">최소 500만 원</p></div>
+          </button>
+          <button type="button" class="rounded-xl border-2 border-transparent bg-white p-4 text-left shadow-card h-[180px] flex flex-col justify-between">
+            <div><h3 class="text-[15px] font-bold leading-tight">고위험ETF</h3><p class="mt-1 text-[12px] text-on-surface-variant">큰 폭의 변동을 감수해요</p></div>
+            <div><span class="rounded-full bg-brand-green-light px-2 py-0.5 text-[11px] font-bold text-brand-green">+40%</span> <span class="rounded-full bg-brand-red-light px-2 py-0.5 text-[11px] font-bold text-brand-red">-50%</span><p class="mt-2 text-[10px] text-on-surface-variant">성공 <b class="text-brand-green">1,2,3,4</b> · 보존 <b class="text-brand-purple">5</b></p><p class="mt-2 border-t border-surface-variant pt-2 text-[11px] text-outline">최소 500만 원</p></div>
+          </button>
+          <button type="button" class="rounded-xl border-2 border-transparent bg-white p-4 text-left shadow-card h-[180px] flex flex-col justify-between">
+            <div><h3 class="text-[15px] font-bold leading-tight">선물/옵션</h3><p class="mt-1 text-[12px] text-on-surface-variant">높은 위험과 수익을 함께 봐요</p></div>
+            <div><span class="rounded-full bg-brand-green-light px-2 py-0.5 text-[11px] font-bold text-brand-green">+60%</span> <span class="rounded-full bg-brand-red-light px-2 py-0.5 text-[11px] font-bold text-brand-red">-60%</span><p class="mt-2 text-[10px] text-on-surface-variant">성공 <b class="text-brand-green">1,2,3</b> · 보존 <b class="text-brand-purple">4</b></p><p class="mt-2 border-t border-surface-variant pt-2 text-[11px] text-outline">최소 500만 원</p></div>
+          </button>
+        </div>
+        <button type="button" class="mt-3 h-11 w-full rounded-xl bg-brand-gray-light text-[15px] font-medium text-brand-gray-dark">이번 턴 투자 안 함</button>
+      </section>
+    </main>
+  </div>
+
+  <div id="entrySheet" class="fixed inset-0 z-50 hidden items-end justify-center" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+    <div class="absolute inset-0 bg-black/45" data-close-sheet></div>
+    <section class="relative w-full max-w-[390px] rounded-t-2xl bg-white px-5 pb-7 pt-4 shadow-2xl">
+      <div class="mx-auto mb-5 h-1.5 w-10 rounded-full bg-brand-border"></div>
+      <div class="mb-5 flex items-start justify-between gap-3"><div><p id="sheetEyebrow" class="text-[13px] font-bold text-brand-purple">1년차 기록</p><h2 id="sheetTitle" class="mt-1 text-[20px] font-bold">이번 버킷 기록</h2><p id="sheetHelp" class="mt-1 text-[13px] leading-5 text-brand-gray-text">저장하면 이전 기록에 더해집니다.</p></div><button type="button" data-close-sheet aria-label="닫기" class="rounded-lg p-1 text-brand-gray-dark"><span class="material-symbols-outlined">close</span></button></div>
+      <form id="bucketForm" class="space-y-4">
+        <div><label id="countLabel" for="bucketCount" class="mb-2 block text-[14px] font-bold">이룬 버킷 개수</label><input id="bucketCount" class="custom-input" type="number" min="0" inputmode="numeric" placeholder="예: 3" required></div>
+        <div><label for="bucketScore" class="mb-2 block text-[14px] font-bold">버킷 점수</label><input id="bucketScore" class="custom-input" type="number" min="0" inputmode="numeric" placeholder="예: 120" required></div>
+        <button type="submit" class="h-12 w-full rounded-xl bg-brand-purple text-[15px] font-bold text-white active:scale-[.98]">내 기록 저장</button>
+      </form>
+    </section>
+  </div>
+
+  <script>
+    let mode = 'year';
+    const totals = { count: 3, score: 120 };
+    const sheet = document.getElementById('entrySheet');
+    function setMode(nextMode) {
+      mode = nextMode;
+      const isFinal = mode === 'final';
+      document.querySelectorAll('[data-mode]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.mode === mode)));
+      document.getElementById('turnNumber').textContent = isFinal ? '20' : '4';
+      document.getElementById('phaseLabel').textContent = '투자 접수 중';
+      document.getElementById('progressBar').className = `h-full rounded-full bg-brand-blue ${isFinal ? 'w-full' : 'w-1/5'}`;
+      document.getElementById('bucketTitle').textContent = isFinal ? '5년차 버킷 기록' : '1년차 버킷 기록';
+      document.getElementById('bucketDescription').textContent = '이번 1년 동안 이룬 버킷 개수와 점수를 적어 주세요.';
+      document.getElementById('openEntry').textContent = '버킷 기록 입력';
+      document.getElementById('endCard').classList.add('hidden');
+      document.getElementById('investCard').classList.remove('hidden');
+    }
+    function openSheet() {
+      const isFinal = mode === 'final';
+      document.getElementById('sheetEyebrow').textContent = isFinal ? '5년차 기록' : '1년차 기록';
+      document.getElementById('sheetTitle').textContent = '이번 버킷 기록';
+      document.getElementById('sheetHelp').textContent = `현재 누적 ${totals.count}개 · ${totals.score}점`;
+      document.getElementById('countLabel').textContent = '이번에 이룬 버킷 개수';
+      sheet.classList.remove('hidden'); sheet.classList.add('flex'); document.getElementById('bucketCount').focus();
+    }
+    function closeSheet() { sheet.classList.add('hidden'); sheet.classList.remove('flex'); }
+    document.querySelectorAll('[data-mode]').forEach(button => button.addEventListener('click', () => setMode(button.dataset.mode)));
+    document.getElementById('openEntry').addEventListener('click', openSheet);
+    document.querySelectorAll('[data-close-sheet]').forEach(button => button.addEventListener('click', closeSheet));
+    document.getElementById('bucketForm').addEventListener('submit', event => {
+      event.preventDefault();
+      totals.count += Number(document.getElementById('bucketCount').value || 0);
+      totals.score += Number(document.getElementById('bucketScore').value || 0);
+      document.getElementById('bucketTotal').textContent = `현재 누적 ${totals.count}개 · ${totals.score}점`;
+      document.getElementById('bucketStatus').textContent = '입력 완료';
+      document.getElementById('bucketStatus').className = 'shrink-0 rounded-full bg-brand-green-light px-2 py-1 text-[11px] font-bold text-brand-green';
+      closeSheet();
+    });
+    document.addEventListener('keydown', event => { if (event.key === 'Escape') closeSheet(); });
+    setMode('year');
+  </script>
+</body>
+</html>
