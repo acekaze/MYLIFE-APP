@@ -959,7 +959,7 @@ const MasterApp = (() => {
             <h2 class="font-bold text-[18px]">${isFinalSettling ? '🏁 게임 종료 정산' : '⏳ 정산 대기'} ${matured.length}건</h2>
             <button id="settleAllBtn" class="h-[40px] px-5 bg-brand-green text-white rounded-xl font-bold text-[14px] hover:bg-green-600 transition-colors">전체 대리 정산</button>
           </div>
-          <p class="text-brand-gray-text text-[13px] mb-6">${isFinalSettling ? '미만기 투자입니다. 주사위를 굴려주세요. 성공=중도해약 이율 수익, 실패=손실률 절반, 보존=원금.' : '참가자가 직접 입력합니다. 필요 시 대리 정산 가능합니다.'}</p>
+            <p class="text-brand-gray-text text-[13px] mb-6">${isFinalSettling ? '미만기 투자입니다. 주사위를 굴려주세요. 성공·실패 모두 경과 기간 비율(최소 25%)로 정산하고, 보존은 원금입니다.' : '참가자가 직접 입력합니다. 필요 시 대리 정산 가능합니다.'}</p>
           <div class="space-y-3">
             ${matured.map(inv => {
               const product = getProductById(inv.productId);
@@ -1399,7 +1399,7 @@ const MasterApp = (() => {
   }
 
   function endGame() {
-    if (!confirm('게임을 종료하시겠습니까?\n미만기 투자는 주사위를 굴려 중도해약 이율로 정산됩니다.')) return;
+    if (!confirm('게임을 종료하시겠습니까?\n미만기 투자는 주사위를 굴려 경과 기간 비율로 정산됩니다.')) return;
 
     // 미만기 투자를 정산 대기 상태로 전환하고, 정산 phase로 변경
     const state = sessionData.state || {};
@@ -1418,21 +1418,15 @@ const MasterApp = (() => {
     const product = getProductById(inv.productId);
     if (!product) return;
 
+    const state = sessionData.state || {};
     const result = judgeResult(product, diceValue);
-    let calc;
-    if (result === 'success') {
-      // 중도해약 이율 적용
-      calc = { profitAmount: Math.round(inv.amount * product.earlyTermRate), lossAmount: 0, preserveAmount: 0 };
-    } else if (result === 'fail') {
-      // 원래 손실률의 절반 적용
-      calc = { profitAmount: 0, lossAmount: Math.round(inv.amount * (product.lossRate / 2)), preserveAmount: 0 };
-    } else {
-      calc = { profitAmount: 0, lossAmount: 0, preserveAmount: inv.amount };
-    }
+    const settlementFactor = getFinalSettlementFactor(inv.turn, state.currentTurn);
+    const calc = calculateFinalSettlement(inv.amount, product, result, settlementFactor);
 
     db.ref(`sessions/${sessionId}/investments/${invId}`).update({
       diceValue, result: result === 'success' ? 'earlyTerm' : result === 'fail' ? 'earlyTermFail' : 'preserve',
       profitAmount: calc.profitAmount, lossAmount: calc.lossAmount, preserveAmount: calc.preserveAmount,
+      finalSettlementFactor: settlementFactor,
       settledAt: Date.now(), settledBy: 'gameEnd',
     }).then(() => {
       const resultText = result === 'success' ? `중도해약 수익 +${formatAmount(calc.profitAmount)}` :

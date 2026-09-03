@@ -6,9 +6,8 @@ const PRODUCTS = [
   {
     id: 'bond-fund',
     name: '채권형펀드',
-    profitRate: 0.08,
+    profitRate: 0.04,
     lossRate: 0,
-    earlyTermRate: 0.04,
     profitDice: [1, 2, 3, 5, 6],
     preserveDice: [4],
     lossDice: [],
@@ -18,9 +17,8 @@ const PRODUCTS = [
   {
     id: 'stock-fund',
     name: '주식형펀드',
-    profitRate: 0.16,
+    profitRate: 0.08,
     lossRate: -0.20,
-    earlyTermRate: 0.08,
     profitDice: [1, 2, 3, 6],
     preserveDice: [4],
     lossDice: [5],
@@ -30,9 +28,8 @@ const PRODUCTS = [
   {
     id: 'high-etf',
     name: '고위험ETF',
-    profitRate: 0.40,
+    profitRate: 0.20,
     lossRate: -0.50,
-    earlyTermRate: 0.20,
     profitDice: [1, 2, 3, 4],
     preserveDice: [5],
     lossDice: [6],
@@ -42,9 +39,8 @@ const PRODUCTS = [
   {
     id: 'futures',
     name: '선물/옵션',
-    profitRate: 0.60,
+    profitRate: 0.30,
     lossRate: -0.60,
-    earlyTermRate: 0.30,
     profitDice: [1, 2, 3],
     preserveDice: [4],
     lossDice: [5, 6],
@@ -73,8 +69,25 @@ function calculateResult(amount, product, result) {
       return { profitAmount: 0, lossAmount: Math.round(amount * product.lossRate), preserveAmount: 0 };
     case 'preserve':
       return { profitAmount: 0, lossAmount: 0, preserveAmount: amount };
-    case 'earlyTerm':
-      return { profitAmount: Math.round(amount * (product.earlyTermRate || 0)), lossAmount: 0, preserveAmount: 0 };
+    default:
+      return { profitAmount: 0, lossAmount: 0, preserveAmount: 0 };
+  }
+}
+
+// 게임 종료 시 미만기 투자 정산 비율: 경과 기간을 반영하되 최소 25%를 적용
+function getFinalSettlementFactor(investmentTurn, currentTurn) {
+  const elapsedTurns = Math.max(0, (Number(currentTurn) || 0) - (Number(investmentTurn) || 0));
+  return Math.min(1, Math.max(0.25, elapsedTurns / MATURITY_TURNS));
+}
+
+function calculateFinalSettlement(amount, product, result, factor) {
+  switch (result) {
+    case 'success':
+      return { profitAmount: Math.round(amount * product.profitRate * factor), lossAmount: 0, preserveAmount: 0 };
+    case 'fail':
+      return { profitAmount: 0, lossAmount: Math.round(amount * product.lossRate * factor), preserveAmount: 0 };
+    case 'preserve':
+      return { profitAmount: 0, lossAmount: 0, preserveAmount: amount };
     default:
       return { profitAmount: 0, lossAmount: 0, preserveAmount: 0 };
   }
