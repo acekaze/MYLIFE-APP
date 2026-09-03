@@ -190,7 +190,8 @@ const PlayerApp = (() => {
       db.ref(`sessions/${sessionId}/investments`).once('value'),
       db.ref(`sessions/${sessionId}/preInvestmentChecks/${preInvestKey}`).once('value'),
       db.ref(`sessions/${sessionId}/bucketRecords/${playerId}`).once('value'),
-    ]).then(([investmentSnap, preInvestSnap, bucketSnap]) => {
+      db.ref(`sessions/${sessionId}/finalCash/${playerId}`).once('value'),
+    ]).then(([investmentSnap, preInvestSnap, bucketSnap, finalCashSnap]) => {
       if (renderTurn !== currentTurn) return;
       const investments = [];
       investmentSnap.forEach(child => {
@@ -198,6 +199,7 @@ const PlayerApp = (() => {
         if (inv.playerId === playerId) investments.push({ id: child.key, ...inv });
       });
       const bucketRecords = bucketSnap.val() || {};
+      const finalCash = finalCashSnap.val();
       const bucketTotals = getBucketTotals(bucketRecords);
       const bucketRecordCount = Object.keys(bucketRecords).length;
 
@@ -236,7 +238,7 @@ const PlayerApp = (() => {
           <!-- Content -->
           <main class="p-4 pb-20 space-y-4">
             ${renderBucketStatus(bucketTotals, bucketRecordCount)}
-            ${gameEnded ? renderGameEndedMessage() : ''}
+            ${gameEnded ? renderGameEndedMessage(finalCash) : ''}
             ${settled.length > 0 ? renderHeroSummary(investments.length, totalProfit, totalLoss, netResult) : ''}
             ${!gameEnded && myMatured.length > 0 ? renderDiceSection(myMatured) : ''}
             ${!gameEnded && phase === 'investing' ? renderTodoBanner() : ''}
@@ -251,19 +253,22 @@ const PlayerApp = (() => {
       if (!gameEnded && myMatured.length > 0) bindDice(myMatured);
       if (settled.length > 0) bindShareResult();
 
-      if (!gameEnded && phase === 'investing' && !preInvestSnap.exists()) {
-        showPreInvestmentNotice(bucketRecords, currentPeriod);
+      const needsQuarterRecord = renderTurn % 4 === 0 && !bucketRecords[String(currentPeriod)];
+      const needsFinalCash = renderTurn === maxTurns && !finalCash;
+      if (!gameEnded && phase === 'investing' && (!preInvestSnap.exists() || needsQuarterRecord || needsFinalCash)) {
+        showPreInvestmentNotice(bucketRecords, currentPeriod, finalCash);
       }
     });
   }
 
-  function renderGameEndedMessage() {
+  function renderGameEndedMessage(finalCash) {
     return `
       <div class="bg-white rounded-2xl p-6 shadow-card text-center">
         <div class="text-[40px] mb-3">🏁</div>
         <h2 class="font-bold text-[18px] mb-2">게임이 종료되었습니다</h2>
         <p class="text-brand-gray-text text-[14px]">모든 투자가 정산되었습니다.<br>아래에서 최종 결과를 확인하세요.</p>
         <p class="text-brand-gray-text text-[13px] mt-3">버킷 기록은 최종 결과에 포함됩니다.</p>
+        ${finalCash ? `<p class="text-brand-purple text-[13px] font-bold mt-2">최종 남은 현금 ${formatAmount(Number(finalCash.amount) || 0)}만 원</p>` : ''}
       </div>
     `;
   }
@@ -290,11 +295,13 @@ const PlayerApp = (() => {
     `;
   }
 
-  function showPreInvestmentNotice(bucketRecords, period) {
+  function showPreInvestmentNotice(bucketRecords, period, finalCash) {
     if (document.getElementById('preInvestModal')) return;
 
     const isQuarterTurn = currentTurn % 4 === 0;
+    const isFinalTurn = currentTurn === maxTurns;
     const hasCurrentRecord = Boolean(bucketRecords[String(period)]);
+    const hasFinalCash = Boolean(finalCash);
     const totals = getBucketTotals(bucketRecords);
     const modal = document.createElement('div');
     modal.id = 'preInvestModal';
@@ -328,13 +335,22 @@ const PlayerApp = (() => {
               </div>
             </div>
           ` : ''}
+          ${isFinalTurn && !hasFinalCash ? `
+            <div style="margin:0 0 16px; padding:16px; border:1px solid rgba(49,130,246,.2); border-radius:12px; background:rgba(232,244,253,.7);">
+              <h3 style="font-size:14px; font-weight:700; margin:0;">최종 남은 현금</h3>
+              <label style="display:block; font-size:12px; font-weight:500; color:#4E5968; margin-top:12px;">게임을 마친 뒤 남은 현금 (만 원)
+                <input id="finalCashInput" type="number" min="0" inputmode="numeric" required style="box-sizing:border-box; width:100%; height:48px; margin-top:6px; padding:0 12px; border:1px solid #E5E8EB; border-radius:12px; background:#fff; font-size:15px;" placeholder="0">
+              </label>
+            </div>
+          ` : ''}
           <button id="startInvestingBtn" type="button" style="width:100%; height:48px; border:0; border-radius:12px; background:#3182F6; color:#fff; font-size:15px; font-weight:700; cursor:pointer;">앞 단계 완료 · 투자 시작</button>
         </section>
       </div>
     `;
     document.body.appendChild(modal);
 
-    const focusTarget = document.getElementById(isQuarterTurn && !hasCurrentRecord ? 'bucketCountInput' : 'startInvestingBtn');
+    const focusTargetId = isQuarterTurn && !hasCurrentRecord ? 'bucketCountInput' : isFinalTurn && !hasFinalCash ? 'finalCashInput' : 'startInvestingBtn';
+    const focusTarget = document.getElementById(focusTargetId);
     if (focusTarget) focusTarget.focus();
 
     document.getElementById('startInvestingBtn').addEventListener('click', () => {
@@ -359,6 +375,21 @@ const PlayerApp = (() => {
         }
         updates[`sessions/${sessionId}/bucketRecords/${playerId}/${period}`] = {
           period, turn: currentTurn, bucketCount: count, bucketScore: score, updatedAt: Date.now(),
+        };
+      }
+      if (isFinalTurn && !hasFinalCash) {
+        const finalCashInput = document.getElementById('finalCashInput');
+        if (finalCashInput.value === '') {
+          showToast('남은 현금을 입력해 주세요');
+          return;
+        }
+        const amount = Number(finalCashInput.value);
+        if (!Number.isInteger(amount) || amount < 0) {
+          showToast('남은 현금을 0 이상으로 입력해 주세요');
+          return;
+        }
+        updates[`sessions/${sessionId}/finalCash/${playerId}`] = {
+          amount, turn: currentTurn, updatedAt: Date.now(),
         };
       }
 

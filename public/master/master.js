@@ -386,6 +386,7 @@ const MasterApp = (() => {
     const teams = sessionData.teams || {};
     const skips = sessionData.skips || {};
     const bucketRecords = sessionData.bucketRecords || {};
+    const finalCash = sessionData.finalCash || {};
     const playerCount = Object.keys(players).length;
     const teamCount = Object.keys(teams).length;
     const investArr = Object.entries(investments).map(([id, inv]) => ({ id, ...inv }));
@@ -522,7 +523,7 @@ const MasterApp = (() => {
       case 'worldevent': container.innerHTML = renderWorldEvent(investArr); bindWorldEventEvents(investArr); break;
       case 'all': container.innerHTML = renderAllRecords(investArr); break;
       case 'teams': container.innerHTML = renderTeams(teamArr, playerArr); bindTeamEvents(); break;
-      case 'ranking': container.innerHTML = renderRanking(teamArr, playerArr, investArr, bucketRecords); break;
+      case 'ranking': container.innerHTML = renderRanking(teamArr, playerArr, investArr, bucketRecords, finalCash); break;
     }
   }
 
@@ -1298,12 +1299,13 @@ const MasterApp = (() => {
   }
 
   // ===== RANKING =====
-  function renderRanking(teamArr, playerArr, investments, bucketRecords) {
+  function renderRanking(teamArr, playerArr, investments, bucketRecords, finalCash) {
     const settled = investments.filter(i => i.result && i.result !== 'pending');
     const playerStats = playerArr.map(p => {
       const myInv = investments.filter(i => i.playerId === p.id);
       const mySettled = myInv.filter(i => i.result && i.result !== 'pending');
       const bucketHistory = Object.values((bucketRecords || {})[p.id] || {});
+      const finalCashRecord = (finalCash || {})[p.id];
       const totalProfit = mySettled.reduce((s, i) => s + (i.profitAmount || 0), 0);
       const totalLoss = mySettled.reduce((s, i) => s + (i.lossAmount || 0), 0);
       return {
@@ -1311,20 +1313,25 @@ const MasterApp = (() => {
         totalAmount: myInv.reduce((s, i) => s + (i.amount || 0), 0),
         bucketCount: bucketHistory.reduce((sum, record) => sum + (Number(record.bucketCount) || 0), 0),
         satisfactionScore: bucketHistory.reduce((sum, record) => sum + (Number(record.bucketScore) || 0), 0),
+        hasFinalCash: Boolean(finalCashRecord),
+        finalCash: Number(finalCashRecord?.amount) || 0,
       };
     });
     const ranked = [...playerStats].sort((a, b) => b.netProfit - a.netProfit);
     const totalBucketCount = playerStats.reduce((sum, player) => sum + player.bucketCount, 0);
     const totalSatisfactionScore = playerStats.reduce((sum, player) => sum + player.satisfactionScore, 0);
+    const totalFinalCash = playerStats.reduce((sum, player) => sum + player.finalCash, 0);
+    const playersWithFinalCash = playerStats.filter(player => player.hasFinalCash).length;
     const medals = ['🥇', '🥈', '🥉'];
     const borderColors = ['border-[#FFD700]', 'border-[#C0C0C0]', 'border-[#CD7F32]'];
 
     return `
-      <h2 class="font-bold text-[20px] mb-4">📌 버킷·만족도 종합</h2>
+      <h2 class="font-bold text-[20px] mb-4">📌 버킷·만족도·현금 종합</h2>
       <div class="bento-card mb-8 border border-brand-purple/15">
-        <div class="grid grid-cols-2 gap-3 mb-5">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
           <div class="rounded-xl bg-brand-purple-light/60 p-4"><p class="text-[12px] text-brand-gray-dark">전체 버킷 개수</p><p class="mt-1 text-[26px] font-bold">${totalBucketCount.toLocaleString('ko-KR')}<span class="ml-1 text-[13px] font-medium text-brand-gray-text">개</span></p></div>
           <div class="rounded-xl bg-brand-purple-light/60 p-4"><p class="text-[12px] text-brand-gray-dark">전체 만족도 점수</p><p class="mt-1 text-[26px] font-bold">${totalSatisfactionScore.toLocaleString('ko-KR')}<span class="ml-1 text-[13px] font-medium text-brand-gray-text">점</span></p></div>
+          <div class="rounded-xl bg-brand-blue-light p-4"><p class="text-[12px] text-brand-gray-dark">전체 남은 현금 <span class="text-brand-gray-text">${playersWithFinalCash}/${playerStats.length}명</span></p><p class="mt-1 text-[26px] font-bold">${formatAmount(totalFinalCash)}<span class="ml-1 text-[13px] font-medium text-brand-gray-text">만 원</span></p></div>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
           ${playerStats.map(player => {
@@ -1332,7 +1339,7 @@ const MasterApp = (() => {
             return `
               <div class="flex items-center justify-between rounded-xl border border-outline-variant bg-white p-4">
                 <div><div class="flex items-center gap-2"><span class="bg-brand-gray-light text-brand-gray-dark text-[11px] font-bold px-2 py-1 rounded">${teamName}</span><span class="font-medium">${player.name}</span></div></div>
-                <div class="flex gap-5 text-right"><div><p class="text-[11px] text-brand-gray-text">버킷</p><p class="mt-1 text-[15px] font-bold">${player.bucketCount.toLocaleString('ko-KR')}개</p></div><div><p class="text-[11px] text-brand-gray-text">만족도</p><p class="mt-1 text-[15px] font-bold text-brand-purple">${player.satisfactionScore.toLocaleString('ko-KR')}점</p></div></div>
+                <div class="grid grid-cols-3 gap-4 text-right"><div><p class="text-[11px] text-brand-gray-text">버킷</p><p class="mt-1 text-[15px] font-bold">${player.bucketCount.toLocaleString('ko-KR')}개</p></div><div><p class="text-[11px] text-brand-gray-text">만족도</p><p class="mt-1 text-[15px] font-bold text-brand-purple">${player.satisfactionScore.toLocaleString('ko-KR')}점</p></div><div><p class="text-[11px] text-brand-gray-text">남은 현금</p><p class="mt-1 text-[15px] font-bold text-brand-blue">${player.hasFinalCash ? `${formatAmount(player.finalCash)}만` : '미입력'}</p></div></div>
               </div>
             `;
           }).join('')}
