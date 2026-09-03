@@ -37,9 +37,9 @@ Main content (padding 16px, background #F5F6F8):
 
 Product selection as bento grid (2 columns):
 - Card 1: "채권형펀드" — green tag "+4%", subtitle "손실 없음", small dice info "성공 1,2,3,5,6 · 보존 4"
-- Card 2: "주식형펀드" — green "+8%", red "-20%", dice info "성공 1,2,3,6 · 보존 4 · 실패 5"
-- Card 3: "고위험ETF" — green "+20%", red "-50%", dice info "성공 1,2,3,4 · 보존 5 · 실패 6"
-- Card 4: "선물/옵션" — green "+30%", red "-60%", dice info "성공 1,2,3 · 보존 4 · 실패 5,6"
+- Card 2: "주식형펀드" — green "+8%", red "-10%", dice info "성공 1,2,3,6 · 보존 4 · 실패 5"
+- Card 3: "고위험ETF" — green "+20%", red "-30%", dice info "성공 1,2,3,4 · 보존 5 · 실패 6"
+- Card 4: "선물/옵션" — green "+30%", red "-40%", dice info "성공 1,2,3 · 보존 4 · 실패 5,6"
 
 Each card: white background, border-radius 16px, padding 16px, subtle shadow. Selected state: blue border 2px + light blue background.
 
