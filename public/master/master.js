@@ -522,7 +522,7 @@ const MasterApp = (() => {
       case 'worldevent': container.innerHTML = renderWorldEvent(investArr); bindWorldEventEvents(investArr); break;
       case 'all': container.innerHTML = renderAllRecords(investArr); break;
       case 'teams': container.innerHTML = renderTeams(teamArr, playerArr); bindTeamEvents(); break;
-      case 'ranking': container.innerHTML = renderRanking(teamArr, playerArr, investArr); break;
+      case 'ranking': container.innerHTML = renderRanking(teamArr, playerArr, investArr, bucketRecords); break;
     }
   }
 
@@ -583,7 +583,7 @@ const MasterApp = (() => {
         </div>
         <div class="grid grid-cols-2 gap-3 mb-4">
           <div class="rounded-xl bg-brand-purple-light/60 p-4"><p class="text-[12px] text-brand-gray-dark">전체 버킷 개수</p><p class="mt-1 text-[24px] font-bold">${totalBucketCount.toLocaleString('ko-KR')}<span class="ml-1 text-[13px] font-medium text-brand-gray-text">개</span></p></div>
-          <div class="rounded-xl bg-brand-purple-light/60 p-4"><p class="text-[12px] text-brand-gray-dark">전체 버킷 점수</p><p class="mt-1 text-[24px] font-bold">${totalBucketScore.toLocaleString('ko-KR')}<span class="ml-1 text-[13px] font-medium text-brand-gray-text">점</span></p></div>
+          <div class="rounded-xl bg-brand-purple-light/60 p-4"><p class="text-[12px] text-brand-gray-dark">전체 만족도 점수</p><p class="mt-1 text-[24px] font-bold">${totalBucketScore.toLocaleString('ko-KR')}<span class="ml-1 text-[13px] font-medium text-brand-gray-text">점</span></p></div>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
           ${bucketByPlayer.map(player => {
@@ -591,7 +591,7 @@ const MasterApp = (() => {
             return `
               <div class="flex items-center justify-between rounded-xl border border-outline-variant bg-white p-4">
                 <div class="min-w-0"><div class="flex items-center gap-2"><span class="bg-brand-gray-light text-brand-gray-dark text-[11px] font-bold px-2 py-1 rounded">${teamName}</span><span class="font-medium truncate">${player.name}</span></div><p class="mt-1 text-[12px] text-brand-gray-text">${player.recordCount}회 기록</p></div>
-                <div class="text-right shrink-0"><p class="font-bold text-[15px]">${player.bucketCount.toLocaleString('ko-KR')}개</p><p class="mt-1 text-[12px] text-brand-purple font-bold">${player.bucketScore.toLocaleString('ko-KR')}점</p></div>
+                <div class="text-right shrink-0"><p class="font-bold text-[15px]">${player.bucketCount.toLocaleString('ko-KR')}개</p><p class="mt-1 text-[12px] text-brand-purple font-bold">만족도 ${player.bucketScore.toLocaleString('ko-KR')}점</p></div>
               </div>
             `;
           }).join('')}
@@ -610,7 +610,7 @@ const MasterApp = (() => {
               </div>
               <div class="flex items-center gap-4">
                 <span class="text-on-surface-variant">${t.done}/${t.total}명</span>
-                <span class="text-brand-purple text-[12px] font-bold">버킷 ${t.bucketCount}개 · ${t.bucketScore}점</span>
+                <span class="text-brand-purple text-[12px] font-bold">버킷 ${t.bucketCount}개 · 만족도 ${t.bucketScore}점</span>
                 ${t.allDone ?
                   '<span class="px-3 py-1 rounded-full bg-brand-green-light text-brand-green text-[12px] font-bold">완료</span>' :
                   '<span class="px-3 py-1 rounded-full bg-brand-orange-light text-brand-orange text-[12px] font-bold">대기</span>'}
@@ -1298,20 +1298,47 @@ const MasterApp = (() => {
   }
 
   // ===== RANKING =====
-  function renderRanking(teamArr, playerArr, investments) {
+  function renderRanking(teamArr, playerArr, investments, bucketRecords) {
     const settled = investments.filter(i => i.result && i.result !== 'pending');
     const playerStats = playerArr.map(p => {
       const myInv = investments.filter(i => i.playerId === p.id);
       const mySettled = myInv.filter(i => i.result && i.result !== 'pending');
+      const bucketHistory = Object.values((bucketRecords || {})[p.id] || {});
       const totalProfit = mySettled.reduce((s, i) => s + (i.profitAmount || 0), 0);
       const totalLoss = mySettled.reduce((s, i) => s + (i.lossAmount || 0), 0);
-      return { ...p, investCount: myInv.length, netProfit: totalProfit + totalLoss, totalLoss, totalAmount: myInv.reduce((s, i) => s + (i.amount || 0), 0) };
+      return {
+        ...p, investCount: myInv.length, netProfit: totalProfit + totalLoss, totalLoss,
+        totalAmount: myInv.reduce((s, i) => s + (i.amount || 0), 0),
+        bucketCount: bucketHistory.reduce((sum, record) => sum + (Number(record.bucketCount) || 0), 0),
+        satisfactionScore: bucketHistory.reduce((sum, record) => sum + (Number(record.bucketScore) || 0), 0),
+      };
     });
     const ranked = [...playerStats].sort((a, b) => b.netProfit - a.netProfit);
+    const totalBucketCount = playerStats.reduce((sum, player) => sum + player.bucketCount, 0);
+    const totalSatisfactionScore = playerStats.reduce((sum, player) => sum + player.satisfactionScore, 0);
     const medals = ['🥇', '🥈', '🥉'];
     const borderColors = ['border-[#FFD700]', 'border-[#C0C0C0]', 'border-[#CD7F32]'];
 
     return `
+      <h2 class="font-bold text-[20px] mb-4">📌 버킷·만족도 종합</h2>
+      <div class="bento-card mb-8 border border-brand-purple/15">
+        <div class="grid grid-cols-2 gap-3 mb-5">
+          <div class="rounded-xl bg-brand-purple-light/60 p-4"><p class="text-[12px] text-brand-gray-dark">전체 버킷 개수</p><p class="mt-1 text-[26px] font-bold">${totalBucketCount.toLocaleString('ko-KR')}<span class="ml-1 text-[13px] font-medium text-brand-gray-text">개</span></p></div>
+          <div class="rounded-xl bg-brand-purple-light/60 p-4"><p class="text-[12px] text-brand-gray-dark">전체 만족도 점수</p><p class="mt-1 text-[26px] font-bold">${totalSatisfactionScore.toLocaleString('ko-KR')}<span class="ml-1 text-[13px] font-medium text-brand-gray-text">점</span></p></div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          ${playerStats.map(player => {
+            const teamName = teamArr.find(team => team.id === player.teamId)?.name || '';
+            return `
+              <div class="flex items-center justify-between rounded-xl border border-outline-variant bg-white p-4">
+                <div><div class="flex items-center gap-2"><span class="bg-brand-gray-light text-brand-gray-dark text-[11px] font-bold px-2 py-1 rounded">${teamName}</span><span class="font-medium">${player.name}</span></div></div>
+                <div class="flex gap-5 text-right"><div><p class="text-[11px] text-brand-gray-text">버킷</p><p class="mt-1 text-[15px] font-bold">${player.bucketCount.toLocaleString('ko-KR')}개</p></div><div><p class="text-[11px] text-brand-gray-text">만족도</p><p class="mt-1 text-[15px] font-bold text-brand-purple">${player.satisfactionScore.toLocaleString('ko-KR')}점</p></div></div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+
       <h2 class="font-bold text-[20px] mb-6">🏆 전체 순수익 랭킹</h2>
 
       <!-- Podium -->

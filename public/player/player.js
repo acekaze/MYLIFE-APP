@@ -284,7 +284,7 @@ const PlayerApp = (() => {
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div class="rounded-xl bg-white/80 px-4 py-3"><p class="text-[12px] text-brand-gray-text">누적 개수</p><p class="mt-1 text-[22px] font-bold text-on-surface">${totals.count}<span class="ml-1 text-[13px] font-medium text-brand-gray-text">개</span></p></div>
-          <div class="rounded-xl bg-white/80 px-4 py-3"><p class="text-[12px] text-brand-gray-text">누적 점수</p><p class="mt-1 text-[22px] font-bold text-on-surface">${totals.score.toLocaleString('ko-KR')}<span class="ml-1 text-[13px] font-medium text-brand-gray-text">점</span></p></div>
+          <div class="rounded-xl bg-white/80 px-4 py-3"><p class="text-[12px] text-brand-gray-text">누적 만족도 점수</p><p class="mt-1 text-[22px] font-bold text-on-surface">${totals.score.toLocaleString('ko-KR')}<span class="ml-1 text-[13px] font-medium text-brand-gray-text">점</span></p></div>
         </div>
       </section>
     `;
