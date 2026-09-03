@@ -82,7 +82,7 @@ sessions/{CODE}/
   bucketRecords/{playerId}/{period}/
     period, turn, bucketCount, bucketScore, updatedAt  # 4턴 단위 버킷 기록
   finalCash/{playerId}/
-    amount, turn, updatedAt  # 최종 턴 종료 전 참가자별 남은 현금(만원)
+    amount, discardedTimeCount, turn, updatedAt  # 최종 턴 종료 전 참가자별 남은 현금(만원)과 버린 시간 개수
   eventAdjustments/{adjustmentId}/
     eventId, investmentId, playerId, productId, amount  # 강제 손실 등 투자와 분리된 이벤트 손익
   worldEvents/{eventId}/      # 월드이벤트 기록
@@ -127,8 +127,8 @@ trainers/{base64(name_pin)}/
 - 만기 도래 시 주사위 굴리기(직접 선택 또는 랜덤 애니메이션+사운드)
 - 진행 중/완료 투자 목록, "내 결과 공유하기"(개인 지표만, 순위 없음)
 - 연출: 성공 축하(색종이), 턴 전환("턴 N"), 게임 종료("당신의 5년")
-- 투자 진입: 매 턴 앞선 게임 진행 순서를 안내하고, 4·8·12·16·20턴에는 버킷 개수·점수를 함께 저장. 최종 턴에는 남은 현금도 입력
-- 현황·최종 산출: 참가자 화면은 본인 누적 버킷 개수·만족도 점수와 최종 현금, 관리자 화면은 참가자별·팀별·전체 현황과 최종 산출의 개인별 버킷·만족도·현금 종합을 표시
+- 투자 진입: 매 턴 앞선 게임 진행 순서를 안내하고, 4·8·12·16·20턴에는 버킷 개수·점수를 함께 저장. 최종 턴에는 남은 현금과 버린 시간 개수도 입력
+- 현황·최종 산출: 참가자 화면은 본인 누적 버킷 개수·만족도 점수와 최종 기록, 관리자 화면은 참가자별·팀별·전체 현황과 최종 산출의 개인별 버킷·만족도·현금·버린 시간 종합을 표시
 
 ### 관리자 (`master/master.js`)
 - 로그인 → 세션 목록(전체/본인) + 트레이너 승인 관리 + 세션 삭제/종료세션 일괄정리

@@ -270,8 +270,8 @@ const PlayerApp = (() => {
       if (settled.length > 0) bindShareResult();
 
       const needsQuarterRecord = renderTurn % 4 === 0 && !bucketRecords[String(currentPeriod)];
-      const needsFinalCash = renderTurn === maxTurns && !finalCash;
-      if (!gameEnded && phase === 'investing' && (!preInvestSnap.exists() || needsQuarterRecord || needsFinalCash)) {
+      const needsFinalInputs = renderTurn === maxTurns && (!finalCash || finalCash.discardedTimeCount === undefined);
+      if (!gameEnded && phase === 'investing' && (!preInvestSnap.exists() || needsQuarterRecord || needsFinalInputs)) {
         showPreInvestmentNotice(bucketRecords, currentPeriod, finalCash);
       }
     });
@@ -284,7 +284,7 @@ const PlayerApp = (() => {
         <h2 class="font-bold text-[18px] mb-2">게임이 종료되었습니다</h2>
         <p class="text-brand-gray-text text-[14px]">모든 투자가 정산되었습니다.<br>아래에서 최종 결과를 확인하세요.</p>
         <p class="text-brand-gray-text text-[13px] mt-3">버킷 기록은 최종 결과에 포함됩니다.</p>
-        ${finalCash ? `<p class="text-brand-purple text-[13px] font-bold mt-2">최종 남은 현금 ${formatAmount(Number(finalCash.amount) || 0)}만 원</p>` : ''}
+        ${finalCash ? `<p class="text-brand-purple text-[13px] font-bold mt-2">최종 남은 현금 ${formatAmount(Number(finalCash.amount) || 0)}만 원 · 버린 시간 ${Number(finalCash.discardedTimeCount) || 0}개</p>` : ''}
       </div>
     `;
   }
@@ -318,6 +318,8 @@ const PlayerApp = (() => {
     const isFinalTurn = currentTurn === maxTurns;
     const hasCurrentRecord = Boolean(bucketRecords[String(period)]);
     const hasFinalCash = Boolean(finalCash);
+    const hasFinalDiscardedTime = finalCash?.discardedTimeCount !== undefined && Number.isInteger(Number(finalCash.discardedTimeCount));
+    const needsFinalInputs = !hasFinalCash || !hasFinalDiscardedTime;
     const totals = getBucketTotals(bucketRecords);
     const modal = document.createElement('div');
     modal.id = 'preInvestModal';
@@ -351,12 +353,17 @@ const PlayerApp = (() => {
               </div>
             </div>
           ` : ''}
-          ${isFinalTurn && !hasFinalCash ? `
+          ${isFinalTurn && needsFinalInputs ? `
             <div style="margin:0 0 16px; padding:16px; border:1px solid rgba(49,130,246,.2); border-radius:12px; background:rgba(232,244,253,.7);">
-              <h3 style="font-size:14px; font-weight:700; margin:0;">최종 남은 현금</h3>
-              <label style="display:block; font-size:12px; font-weight:500; color:#4E5968; margin-top:12px;">게임을 마친 뒤 남은 현금 (만 원)
-                <input id="finalCashInput" type="number" min="0" inputmode="numeric" required style="box-sizing:border-box; width:100%; height:48px; margin-top:6px; padding:0 12px; border:1px solid #E5E8EB; border-radius:12px; background:#fff; font-size:15px;" placeholder="0">
-              </label>
+              <h3 style="font-size:14px; font-weight:700; margin:0;">최종 기록</h3>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px;">
+                <label style="display:block; font-size:12px; font-weight:500; color:#4E5968;">남은 현금 (만 원)
+                  <input id="finalCashInput" type="number" min="0" inputmode="numeric" required value="${hasFinalCash ? Number(finalCash.amount) || 0 : ''}" style="box-sizing:border-box; width:100%; height:48px; margin-top:6px; padding:0 12px; border:1px solid #E5E8EB; border-radius:12px; background:#fff; font-size:15px;" placeholder="0">
+                </label>
+                <label style="display:block; font-size:12px; font-weight:500; color:#4E5968;">버린 시간 개수
+                  <input id="discardedTimeInput" type="number" min="0" inputmode="numeric" required value="${hasFinalDiscardedTime ? Number(finalCash.discardedTimeCount) : ''}" style="box-sizing:border-box; width:100%; height:48px; margin-top:6px; padding:0 12px; border:1px solid #E5E8EB; border-radius:12px; background:#fff; font-size:15px;" placeholder="0">
+                </label>
+              </div>
             </div>
           ` : ''}
           <button id="startInvestingBtn" type="button" style="width:100%; height:48px; border:0; border-radius:12px; background:#3182F6; color:#fff; font-size:15px; font-weight:700; cursor:pointer;">앞 단계 완료 · 투자 시작</button>
@@ -365,7 +372,7 @@ const PlayerApp = (() => {
     `;
     document.body.appendChild(modal);
 
-    const focusTargetId = isQuarterTurn && !hasCurrentRecord ? 'bucketCountInput' : isFinalTurn && !hasFinalCash ? 'finalCashInput' : 'startInvestingBtn';
+    const focusTargetId = isQuarterTurn && !hasCurrentRecord ? 'bucketCountInput' : isFinalTurn && needsFinalInputs ? 'finalCashInput' : 'startInvestingBtn';
     const focusTarget = document.getElementById(focusTargetId);
     if (focusTarget) focusTarget.focus();
 
@@ -393,19 +400,21 @@ const PlayerApp = (() => {
           period, turn: currentTurn, bucketCount: count, bucketScore: score, updatedAt: Date.now(),
         };
       }
-      if (isFinalTurn && !hasFinalCash) {
+      if (isFinalTurn && needsFinalInputs) {
         const finalCashInput = document.getElementById('finalCashInput');
-        if (finalCashInput.value === '') {
-          showToast('남은 현금을 입력해 주세요');
+        const discardedTimeInput = document.getElementById('discardedTimeInput');
+        if (finalCashInput.value === '' || discardedTimeInput.value === '') {
+          showToast('남은 현금과 버린 시간 개수를 입력해 주세요');
           return;
         }
         const amount = Number(finalCashInput.value);
-        if (!Number.isInteger(amount) || amount < 0) {
-          showToast('남은 현금을 0 이상으로 입력해 주세요');
+        const discardedTimeCount = Number(discardedTimeInput.value);
+        if (!Number.isInteger(amount) || amount < 0 || !Number.isInteger(discardedTimeCount) || discardedTimeCount < 0) {
+          showToast('남은 현금과 버린 시간 개수를 0 이상으로 입력해 주세요');
           return;
         }
         updates[`sessions/${sessionId}/finalCash/${playerId}`] = {
-          amount, turn: currentTurn, updatedAt: Date.now(),
+          amount, discardedTimeCount, turn: currentTurn, updatedAt: Date.now(),
         };
       }
 

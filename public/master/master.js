@@ -1389,6 +1389,8 @@ const MasterApp = (() => {
         satisfactionScore: bucketHistory.reduce((sum, record) => sum + (Number(record.bucketScore) || 0), 0),
         hasFinalCash: Boolean(finalCashRecord),
         finalCash: Number(finalCashRecord?.amount) || 0,
+        hasDiscardedTime: finalCashRecord?.discardedTimeCount !== undefined,
+        discardedTimeCount: Number(finalCashRecord?.discardedTimeCount) || 0,
       };
     });
     const ranked = [...playerStats].sort((a, b) => b.netProfit - a.netProfit);
@@ -1396,16 +1398,19 @@ const MasterApp = (() => {
     const totalSatisfactionScore = playerStats.reduce((sum, player) => sum + player.satisfactionScore, 0);
     const totalFinalCash = playerStats.reduce((sum, player) => sum + player.finalCash, 0);
     const playersWithFinalCash = playerStats.filter(player => player.hasFinalCash).length;
+    const totalDiscardedTimeCount = playerStats.reduce((sum, player) => sum + player.discardedTimeCount, 0);
+    const playersWithDiscardedTime = playerStats.filter(player => player.hasDiscardedTime).length;
     const medals = ['🥇', '🥈', '🥉'];
     const borderColors = ['border-[#FFD700]', 'border-[#C0C0C0]', 'border-[#CD7F32]'];
 
     return `
-      <h2 class="font-bold text-[20px] mb-4">📌 버킷·만족도·현금 종합</h2>
+      <h2 class="font-bold text-[20px] mb-4">📌 버킷·만족도·최종 기록 종합</h2>
       <div class="bento-card mb-8 border border-brand-purple/15">
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
           <div class="rounded-xl bg-brand-purple-light/60 p-4"><p class="text-[12px] text-brand-gray-dark">전체 버킷 개수</p><p class="mt-1 text-[26px] font-bold">${totalBucketCount.toLocaleString('ko-KR')}<span class="ml-1 text-[13px] font-medium text-brand-gray-text">개</span></p></div>
           <div class="rounded-xl bg-brand-purple-light/60 p-4"><p class="text-[12px] text-brand-gray-dark">전체 만족도 점수</p><p class="mt-1 text-[26px] font-bold">${totalSatisfactionScore.toLocaleString('ko-KR')}<span class="ml-1 text-[13px] font-medium text-brand-gray-text">점</span></p></div>
           <div class="rounded-xl bg-brand-blue-light p-4"><p class="text-[12px] text-brand-gray-dark">전체 남은 현금 <span class="text-brand-gray-text">${playersWithFinalCash}/${playerStats.length}명</span></p><p class="mt-1 text-[26px] font-bold">${formatAmount(totalFinalCash)}<span class="ml-1 text-[13px] font-medium text-brand-gray-text">만 원</span></p></div>
+          <div class="rounded-xl bg-brand-orange-light p-4"><p class="text-[12px] text-brand-gray-dark">전체 버린 시간 <span class="text-brand-gray-text">${playersWithDiscardedTime}/${playerStats.length}명</span></p><p class="mt-1 text-[26px] font-bold">${totalDiscardedTimeCount.toLocaleString('ko-KR')}<span class="ml-1 text-[13px] font-medium text-brand-gray-text">개</span></p></div>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
           ${playerStats.map(player => {
@@ -1413,7 +1418,7 @@ const MasterApp = (() => {
             return `
               <div class="flex items-center justify-between rounded-xl border border-outline-variant bg-white p-4">
                 <div><div class="flex items-center gap-2"><span class="bg-brand-gray-light text-brand-gray-dark text-[11px] font-bold px-2 py-1 rounded">${teamName}</span><span class="font-medium">${player.name}</span></div></div>
-                <div class="grid grid-cols-3 gap-4 text-right"><div><p class="text-[11px] text-brand-gray-text">버킷</p><p class="mt-1 text-[15px] font-bold">${player.bucketCount.toLocaleString('ko-KR')}개</p></div><div><p class="text-[11px] text-brand-gray-text">만족도</p><p class="mt-1 text-[15px] font-bold text-brand-purple">${player.satisfactionScore.toLocaleString('ko-KR')}점</p></div><div><p class="text-[11px] text-brand-gray-text">남은 현금</p><p class="mt-1 text-[15px] font-bold text-brand-blue">${player.hasFinalCash ? `${formatAmount(player.finalCash)}만` : '미입력'}</p></div></div>
+                <div class="grid grid-cols-4 gap-4 text-right"><div><p class="text-[11px] text-brand-gray-text">버킷</p><p class="mt-1 text-[15px] font-bold">${player.bucketCount.toLocaleString('ko-KR')}개</p></div><div><p class="text-[11px] text-brand-gray-text">만족도</p><p class="mt-1 text-[15px] font-bold text-brand-purple">${player.satisfactionScore.toLocaleString('ko-KR')}점</p></div><div><p class="text-[11px] text-brand-gray-text">남은 현금</p><p class="mt-1 text-[15px] font-bold text-brand-blue">${player.hasFinalCash ? `${formatAmount(player.finalCash)}만` : '미입력'}</p></div><div><p class="text-[11px] text-brand-gray-text">버린 시간</p><p class="mt-1 text-[15px] font-bold text-brand-orange">${player.hasDiscardedTime ? `${player.discardedTimeCount}개` : '미입력'}</p></div></div>
               </div>
             `;
           }).join('')}
