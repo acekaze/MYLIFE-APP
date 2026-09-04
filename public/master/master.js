@@ -388,6 +388,7 @@ const MasterApp = (() => {
     const bucketRecords = sessionData.bucketRecords || {};
     const finalCash = sessionData.finalCash || {};
     const eventAdjustments = sessionData.eventAdjustments || {};
+    const adminDisplayName = sessionData.adminNames?.[authId] || authName || '총관리자';
     const playerCount = Object.keys(players).length;
     const teamCount = Object.keys(teams).length;
     const investArr = Object.entries(investments).map(([id, inv]) => ({ id, ...inv }));
@@ -407,6 +408,7 @@ const MasterApp = (() => {
         <div class="flex items-center gap-4">
           <span class="text-white/80 font-mono text-sm">코드: ${sessionId}</span>
           <span class="text-brand-gray-text text-sm">${teamCount}팀 ${playerCount}명</span>
+          <button id="editAdminNameBtn" class="text-white/80 text-sm px-2 py-1 rounded-lg hover:bg-white/10">${adminDisplayName} ✎</button>
           <button id="exitBtn" class="text-brand-gray-text text-sm px-3 py-1.5 rounded-lg border border-gray-600 hover:bg-gray-800 transition-colors">나가기</button>
         </div>
       </header>
@@ -543,6 +545,14 @@ const MasterApp = (() => {
         bucketCount: records.reduce((sum, record) => sum + (Number(record.bucketCount) || 0), 0),
         bucketScore: records.reduce((sum, record) => sum + (Number(record.bucketScore) || 0), 0),
       };
+    });
+    document.getElementById('editAdminNameBtn').addEventListener('click', () => {
+      const nextName = prompt('현재 세션에서 사용할 관리자 이름을 입력하세요', adminDisplayName)?.trim();
+      if (!nextName || nextName === adminDisplayName) return;
+      const updates = { [`sessions/${sessionId}/adminNames/${authId}`]: nextName };
+      if (sessionData.ownerId === authId) updates[`sessions/${sessionId}/ownerName`] = nextName;
+      db.ref().update(updates).then(() => showToast('관리자 이름을 수정했습니다'))
+        .catch(() => showToast('관리자 이름을 수정하지 못했습니다. 다시 시도해 주세요'));
     });
     const playersWithBucketRecords = bucketByPlayer.filter(player => player.recordCount > 0).length;
     const totalBucketCount = bucketByPlayer.reduce((sum, player) => sum + player.bucketCount, 0);

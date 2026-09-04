@@ -246,7 +246,7 @@ const PlayerApp = (() => {
               <img src="../logo.png" alt="" width="28" height="28" class="rounded-md bg-white/90 p-0.5">
               <h1 class="text-white font-bold text-[17px]">My Life</h1>
             </div>
-            <span class="text-white font-medium text-[14px]">${playerName}${playerTeamName ? ' · ' + playerTeamName : ''}</span>
+            <button id="editPlayerNameBtn" class="text-white font-medium text-[14px] flex items-center gap-1" title="내 이름 수정">${playerName}${playerTeamName ? ' · ' + playerTeamName : ''}<span class="material-symbols-outlined text-[15px]">edit</span></button>
           </header>
 
           <!-- 진행률 바 -->
@@ -269,7 +269,7 @@ const PlayerApp = (() => {
             ${!gameEnded && myMatured.length > 0 ? renderDiceSection(myMatured, isFinalSettling) : ''}
             ${!gameEnded && phase === 'investing' ? renderTodoBanner() : ''}
             ${!gameEnded && phase === 'investing' ? renderInvestForm() : ''}
-            ${active.length > 0 ? renderActiveInvestments(active) : ''}
+            ${active.length > 0 ? renderActiveInvestments(active, phase === 'investing') : ''}
             ${adjustments.length > 0 ? renderEventAdjustments(adjustments) : ''}
             ${settled.length > 0 ? renderSettledInvestments(settled, netResult) : ''}
           </main>
@@ -279,6 +279,8 @@ const PlayerApp = (() => {
       if (!gameEnded && phase === 'investing') bindInvestForm();
       if (!gameEnded && myMatured.length > 0) bindDice(myMatured);
       if (settled.length > 0) bindShareResult();
+      document.getElementById('editPlayerNameBtn')?.addEventListener('click', changePlayerName);
+      if (phase === 'investing') bindInvestmentEdits(active);
       document.getElementById('openBucketSupplementBtn')?.addEventListener('click', () => {
         openBucketRecordModal(bucketRecords, getMissingBucketPeriods(bucketRecords));
       });
@@ -783,8 +785,74 @@ const PlayerApp = (() => {
     `;
   }
 
+  function changePlayerName() {
+    const nextName = prompt('새 이름을 입력하세요', playerName)?.trim();
+    if (!nextName || nextName === playerName) return;
+    db.ref(`sessions/${sessionId}`).once('value').then(snap => {
+      const session = snap.val() || {};
+      const duplicate = Object.entries(session.players || {}).some(([id, player]) => id !== playerId && player.teamId === playerTeam && player.name === nextName);
+      if (duplicate) { showToast('같은 팀에 같은 이름이 있습니다'); return; }
+      const updates = { [`sessions/${sessionId}/players/${playerId}/name`]: nextName };
+      Object.entries(session.investments || {}).forEach(([id, investment]) => {
+        if (investment.playerId === playerId) updates[`sessions/${sessionId}/investments/${id}/playerName`] = nextName;
+      });
+      Object.entries(session.skips || {}).forEach(([id, skip]) => {
+        if (skip.playerId === playerId) updates[`sessions/${sessionId}/skips/${id}/playerName`] = nextName;
+      });
+      Object.entries(session.eventAdjustments || {}).forEach(([id, adjustment]) => {
+        if (adjustment.playerId === playerId) updates[`sessions/${sessionId}/eventAdjustments/${id}/playerName`] = nextName;
+      });
+      db.ref().update(updates).then(() => {
+        playerName = nextName;
+        localStorage.setItem('mylife_player_name', nextName);
+        showToast('이름을 수정했습니다');
+        renderMain(currentPhase);
+      }).catch(() => showToast('이름을 수정하지 못했습니다. 다시 시도해 주세요'));
+    });
+  }
+
+  function bindInvestmentEdits(active) {
+    document.querySelectorAll('.edit-investment').forEach(button => {
+      button.addEventListener('click', () => {
+        const inv = active.find(item => item.id === button.dataset.invId);
+        if (inv) editCurrentInvestment(inv);
+      });
+    });
+  }
+
+  function editCurrentInvestment(investment) {
+    const productList = PRODUCTS.map((product, index) => `${index + 1}. ${product.name} (+${(product.profitRate * 100).toFixed(0)}%)`).join('\n');
+    const currentProductIndex = Math.max(0, PRODUCTS.findIndex(product => product.id === investment.productId));
+    const choice = prompt(`수정할 상품 번호를 입력하세요\n\n${productList}`, String(currentProductIndex + 1));
+    if (choice === null) return;
+    const product = PRODUCTS[parseInt(choice, 10) - 1];
+    if (!product) { showToast('상품 번호를 다시 입력해 주세요'); return; }
+    const amountInput = prompt(`투자 금액 (만 원, 최소 ${product.minAmount})`, String(investment.amount));
+    if (amountInput === null) return;
+    const amount = parseInt(amountInput.replace(/[^0-9]/g, ''), 10) || 0;
+    if (amount < product.minAmount) { showToast(`최소 ${formatAmount(product.minAmount)}만 원 이상 입력해 주세요`); return; }
+
+    Promise.all([
+      db.ref(`sessions/${sessionId}/state`).once('value'),
+      db.ref(`sessions/${sessionId}/investments/${investment.id}`).once('value'),
+    ]).then(([stateSnap, investmentSnap]) => {
+      const state = stateSnap.val() || {};
+      const latest = investmentSnap.val();
+      if (!latest || latest.playerId !== playerId || latest.result !== 'pending' || latest.turn !== state.currentTurn || state.phase !== 'investing') {
+        showToast('현재 턴 투자만 수정할 수 있습니다');
+        return;
+      }
+      db.ref(`sessions/${sessionId}/investments/${investment.id}`).update({
+        productId: product.id, productName: product.name, amount,
+        profitRate: product.profitRate, lossRate: product.lossRate,
+        maturityTurn: state.currentTurn + MATURITY_TURNS, updatedAt: Date.now(),
+      }).then(() => showToast('투자 종목과 금액을 수정했습니다'))
+        .catch(() => showToast('투자 내용을 수정하지 못했습니다. 다시 시도해 주세요'));
+    });
+  }
+
   // ===== ACTIVE INVESTMENTS =====
-  function renderActiveInvestments(active) {
+  function renderActiveInvestments(active, canEditCurrentTurn) {
     return `
       <div class="bg-white rounded-2xl p-5 shadow-card">
         <h2 class="font-bold text-[16px] text-on-surface mb-4">📊 진행 중인 투자</h2>
@@ -798,6 +866,7 @@ const PlayerApp = (() => {
               <div class="text-right">
                 <div class="font-bold text-[15px] text-on-surface">${formatAmount(inv.amount)}만 원</div>
                 <div class="text-brand-orange text-[12px] mt-0.5">만기까지 ${Math.max(0, inv.maturityTurn - currentTurn)}턴</div>
+                ${canEditCurrentTurn && inv.turn === currentTurn ? `<button class="edit-investment mt-2 h-7 px-2 rounded-lg bg-brand-blue/10 text-brand-blue text-[11px] font-bold" data-inv-id="${inv.id}">수정</button>` : ''}
               </div>
             </div>
           `).join('')}
