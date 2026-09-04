@@ -788,7 +788,7 @@ const MasterApp = (() => {
             </label>
             <label class="flex gap-3 p-4 rounded-xl border border-outline-variant bg-white cursor-pointer has-[:checked]:border-brand-blue has-[:checked]:bg-brand-blue-light">
               <input type="radio" name="worldEventEffect" value="forcedLoss" class="world-event-effect mt-0.5 w-5 h-5 text-brand-blue">
-              <div class="flex-1"><p class="font-bold text-[14px]">강제 손실 적용</p><p class="mt-1 text-[13px] text-brand-gray-text">선택한 각 투자 건에 같은 손실액을 반영하고, 투자는 계속 진행합니다.</p>
+              <div class="flex-1"><p class="font-bold text-[14px]">강제 손실 적용</p><p class="mt-1 text-[13px] text-brand-gray-text">선택한 각 투자 원금을 같은 금액만큼 줄이고, 투자는 남은 원금으로 계속 진행합니다.</p>
                 <div id="worldEventLossOptions" class="hidden mt-3"><label class="text-[12px] font-medium text-brand-gray-dark">투자 건당 강제 손실액 (만 원)<input id="worldEventLossAmount" type="number" min="1" inputmode="numeric" class="mt-1 w-full h-[44px] rounded-xl border-outline-variant text-[15px] font-bold focus:border-brand-blue focus:ring-brand-blue" placeholder="0"></label></div>
               </div>
             </label>
@@ -1038,12 +1038,16 @@ const MasterApp = (() => {
       } else if (effectType === 'forcedLoss') {
         let totalLossAmount = 0;
         targets.forEach(inv => {
-          const lossAmount = Math.min(fixedLossAmount, Number(inv.amount) || 0);
+          const currentAmount = Number(inv.amount) || 0;
+          const lossAmount = Math.min(fixedLossAmount, currentAmount);
+          const remainingAmount = currentAmount - lossAmount;
           const adjustmentKey = db.ref(`sessions/${sessionId}/eventAdjustments`).push().key;
+          updates[`sessions/${sessionId}/investments/${inv.id}/amount`] = remainingAmount;
+          updates[`sessions/${sessionId}/investments/${inv.id}/forcedLossTotal`] = (Number(inv.forcedLossTotal) || 0) + lossAmount;
           updates[`sessions/${sessionId}/eventAdjustments/${adjustmentKey}`] = {
             eventId: eventKey, investmentId: inv.id, playerId: inv.playerId, playerName: inv.playerName,
             productId: inv.productId, productName: inv.productName, amount: -lossAmount,
-            turn: state.currentTurn, createdAt: now,
+            principalReduced: true, remainingAmount, turn: state.currentTurn, createdAt: now,
           };
           totalLossAmount += lossAmount;
         });

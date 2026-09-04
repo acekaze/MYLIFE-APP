@@ -84,7 +84,7 @@ sessions/{CODE}/
   finalCash/{playerId}/
     amount, discardedTimeCount, turn, updatedAt  # 최종 턴 종료 전 참가자별 남은 현금(만원)과 버린 시간 개수
   eventAdjustments/{adjustmentId}/
-    eventId, investmentId, playerId, productId, amount  # 강제 손실 등 투자와 분리된 이벤트 손익
+    eventId, investmentId, playerId, productId, amount, principalReduced  # 강제 손실 시 원금 차감과 별도 이벤트 손익
   worldEvents/{eventId}/      # 월드이벤트 기록
     effectType, productNames, targetCount, affectedCount
     dice | fixedLossAmount, totalLossAmount  # 효과별 추가 정보
@@ -110,7 +110,7 @@ trainers/{base64(name_pin)}/
 - 한 턴에 **여러 번 투자 가능**, "투자 안 함"도 선택 가능
 - 계산: 성공=금액×수익률(수익금만, 원금 별도), 실패=금액×손실률(음수), 원금보존=금액
 - 게임 종료(최종 턴) 시 미만기 투자는 주사위 굴려 **경과 기간 비율 정산**: 17턴=75%, 18턴=50%, 19턴=25%, 20턴=25%(최소 적용). 성공·실패에 같은 비율을 적용하고, 보존은 원금
-- 월드이벤트: 관리자가 종목 선택 후 주사위 즉시 정산, 영향 없이 기록, 투자 건당 강제 손실 중 효과 선택. 강제 손실은 투자를 계속 유지하고 별도 이벤트 손익으로 최종 결과에 합산
+- 월드이벤트: 관리자가 종목 선택 후 주사위 즉시 정산, 영향 없이 기록, 투자 건당 강제 손실 중 효과 선택. 강제 손실은 투자 원금을 즉시 차감하고 남은 원금으로 투자를 유지하며, 별도 이벤트 손익도 최종 결과에 합산
 
 ## 7. 관리자 로그인/권한
 
