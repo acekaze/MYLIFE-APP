@@ -224,7 +224,10 @@ const PlayerApp = (() => {
       const bucketTotals = getBucketTotals(bucketRecords);
       const bucketRecordCount = Object.keys(bucketRecords).length;
 
-      const myMatured = investments.filter(inv => inv.maturityTurn <= currentTurn && inv.result === 'pending');
+      const isFinalSettling = phase === 'finalSettling';
+      const myMatured = isFinalSettling
+        ? investments.filter(inv => inv.result === 'pending')
+        : investments.filter(inv => inv.maturityTurn <= currentTurn && inv.result === 'pending');
       const active = investments.filter(inv => inv.result === 'pending');
       const settled = investments.filter(inv => inv.result && inv.result !== 'pending');
       const totalProfit = settled.reduce((s, i) => s + (i.profitAmount || 0), 0);
@@ -263,7 +266,7 @@ const PlayerApp = (() => {
             ${phase === 'quarterClosing' ? renderQuarterClosing(quarterClosingPeriod, bucketRecords) : ''}
             ${gameEnded ? renderGameEndedMessage(finalCash, bucketRecords) : ''}
             ${settled.length > 0 || adjustments.length > 0 ? renderHeroSummary(investments.length, totalProfit, totalLoss + eventAdjustmentTotal, netResult) : ''}
-            ${!gameEnded && myMatured.length > 0 ? renderDiceSection(myMatured) : ''}
+            ${!gameEnded && myMatured.length > 0 ? renderDiceSection(myMatured, isFinalSettling) : ''}
             ${!gameEnded && phase === 'investing' ? renderTodoBanner() : ''}
             ${!gameEnded && phase === 'investing' ? renderInvestForm() : ''}
             ${active.length > 0 ? renderActiveInvestments(active) : ''}
@@ -608,12 +611,13 @@ const PlayerApp = (() => {
   }
 
   // ===== DICE SECTION =====
-  function renderDiceSection(matured) {
+  function renderDiceSection(matured, isFinalSettling) {
     return `
       <div class="bg-[#FFFBF5] rounded-2xl p-5 shadow-card border-l-4 border-brand-orange space-y-4">
         <h2 class="font-bold text-[16px] text-on-surface flex items-center gap-2">
-          <span class="text-[20px]">🎲</span> 만기 도래! 주사위를 굴려주세요
+          <span class="text-[20px]">🎲</span> ${isFinalSettling ? '게임 종료 정산 · 내 주사위를 굴려주세요' : '만기 도래! 주사위를 굴려주세요'}
         </h2>
+        ${isFinalSettling ? '<p class="text-[13px] text-brand-gray-text">미만기 투자도 직접 정산합니다. 성공·실패는 남은 기간 비율로 계산됩니다.</p>' : ''}
         ${matured.map((inv, idx) => {
           const product = getProductById(inv.productId);
           return `
@@ -687,14 +691,39 @@ const PlayerApp = (() => {
     const product = getProductById(inv.productId);
     if (!product) return;
     const result = judgeResult(product, dice);
-    const calc = calculateResult(inv.amount, product, result);
-    db.ref(`sessions/${sessionId}/investments/${invId}`).update({
-      diceValue: dice, result,
+    const isFinalSettling = currentPhase === 'finalSettling';
+    const isEarlyTerm = isFinalSettling && inv.maturityTurn > currentTurn;
+    const settlementFactor = isEarlyTerm ? getFinalSettlementFactor(inv.turn, currentTurn) : null;
+    const calc = isEarlyTerm
+      ? calculateFinalSettlement(inv.amount, product, result, settlementFactor)
+      : calculateResult(inv.amount, product, result);
+    const savedResult = isEarlyTerm ? (result === 'success' ? 'earlyTerm' : result === 'fail' ? 'earlyTermFail' : 'preserve') : result;
+    const updates = {
+      diceValue: dice, result: savedResult,
       profitAmount: calc.profitAmount, lossAmount: calc.lossAmount, preserveAmount: calc.preserveAmount,
       settledAt: Date.now(),
-    }).then(() => {
-      showToast(`${inv.productName}: ${resultLabel(result)} (주사위 ${dice})`);
+    };
+    if (isFinalSettling) {
+      updates.settledBy = 'gameEnd';
+      if (isEarlyTerm) updates.finalSettlementFactor = settlementFactor;
+    }
+    db.ref(`sessions/${sessionId}/investments/${invId}`).update(updates).then(() => {
+      showToast(`${inv.productName}: ${resultLabel(savedResult)} (주사위 ${dice})`);
       if (result === 'success') playSuccessEffect(calc.profitAmount);
+      if (isFinalSettling) completeFinalSettlementIfReady();
+    });
+  }
+
+  function completeFinalSettlementIfReady() {
+    db.ref(`sessions/${sessionId}/investments`).once('value').then(snap => {
+      let hasPending = false;
+      snap.forEach(child => { if (child.val()?.result === 'pending') hasPending = true; });
+      if (hasPending) return;
+      return db.ref(`sessions/${sessionId}/state`).once('value').then(stateSnap => {
+        const state = stateSnap.val() || {};
+        if (state.phase !== 'finalSettling') return;
+        db.ref(`sessions/${sessionId}/state`).update({ gameEnded: true, phase: 'ended', endedAt: Date.now(), gameEnding: false });
+      });
     });
   }
 
