@@ -720,6 +720,12 @@ const MasterApp = (() => {
         showProxyInvestModal(playerId, playerName, teamId, sessionData.state.currentTurn);
       });
     });
+    document.querySelectorAll('.admin-edit-investment').forEach(button => {
+      button.addEventListener('click', () => {
+        const investment = investments.find(item => item.id === button.dataset.invId);
+        if (investment) showAdminEditInvestmentModal(investment);
+      });
+    });
     document.getElementById('copyUrlBtn')?.addEventListener('click', () => {
       const url = document.getElementById('playerUrl')?.textContent?.trim();
       if (url) navigator.clipboard.writeText(url).then(() => showToast('URL 복사됨'));
@@ -944,13 +950,6 @@ const MasterApp = (() => {
       if (!byProduct[inv.productId]) byProduct[inv.productId] = [];
       byProduct[inv.productId].push(inv);
     });
-    document.querySelectorAll('.admin-edit-investment').forEach(button => {
-      button.addEventListener('click', () => {
-        const investment = investments.find(item => item.id === button.dataset.invId);
-        if (investment) showAdminEditInvestmentModal(investment);
-      });
-    });
-
     let selectedProducts = {};
     let finalDice = null;
     let effectType = 'diceSettlement';
