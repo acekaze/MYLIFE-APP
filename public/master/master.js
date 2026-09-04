@@ -480,6 +480,14 @@ const MasterApp = (() => {
       sessionId = null;
       renderSessionList();
     });
+    document.getElementById('editAdminNameBtn').addEventListener('click', () => {
+      const nextName = prompt('현재 세션에서 사용할 관리자 이름을 입력하세요', adminDisplayName)?.trim();
+      if (!nextName || nextName === adminDisplayName) return;
+      const updates = { [`sessions/${sessionId}/adminNames/${authId}`]: nextName };
+      if (sessionData.ownerId === authId) updates[`sessions/${sessionId}/ownerName`] = nextName;
+      db.ref().update(updates).then(() => showToast('관리자 이름을 수정했습니다'))
+        .catch(() => showToast('관리자 이름을 수정하지 못했습니다. 다시 시도해 주세요'));
+    });
 
     document.querySelectorAll('.nav-item').forEach(item => {
       item.addEventListener('click', () => { currentTab = item.dataset.tab; renderAdmin(); });
@@ -526,7 +534,7 @@ const MasterApp = (() => {
     const playerArr = Object.entries(players).map(([id, p]) => ({ id, ...p }));
 
     switch (currentTab) {
-      case 'dashboard': container.innerHTML = renderDashboard(state, teamArr, playerArr, investArr, thisTurnDone, pendingMaturity, bucketRecords); bindDashboardEvents(state, playerArr, teamArr); break;
+      case 'dashboard': container.innerHTML = renderDashboard(state, teamArr, playerArr, investArr, thisTurnDone, pendingMaturity, bucketRecords); bindDashboardEvents(state, playerArr, teamArr, investArr); break;
       case 'maturity': container.innerHTML = renderMaturity(state, investArr); bindMaturityEvents(investArr); break;
       case 'worldevent': container.innerHTML = renderWorldEvent(investArr); bindWorldEventEvents(investArr); break;
       case 'all': container.innerHTML = renderAllRecords(investArr); break;
@@ -546,14 +554,6 @@ const MasterApp = (() => {
         bucketScore: records.reduce((sum, record) => sum + (Number(record.bucketScore) || 0), 0),
       };
     });
-    document.getElementById('editAdminNameBtn').addEventListener('click', () => {
-      const nextName = prompt('현재 세션에서 사용할 관리자 이름을 입력하세요', adminDisplayName)?.trim();
-      if (!nextName || nextName === adminDisplayName) return;
-      const updates = { [`sessions/${sessionId}/adminNames/${authId}`]: nextName };
-      if (sessionData.ownerId === authId) updates[`sessions/${sessionId}/ownerName`] = nextName;
-      db.ref().update(updates).then(() => showToast('관리자 이름을 수정했습니다'))
-        .catch(() => showToast('관리자 이름을 수정하지 못했습니다. 다시 시도해 주세요'));
-    });
     const playersWithBucketRecords = bucketByPlayer.filter(player => player.recordCount > 0).length;
     const totalBucketCount = bucketByPlayer.reduce((sum, player) => sum + player.bucketCount, 0);
     const totalBucketScore = bucketByPlayer.reduce((sum, player) => sum + player.bucketScore, 0);
@@ -571,6 +571,9 @@ const MasterApp = (() => {
       };
     });
     const notDone = playerArr.filter(p => !thisTurnDone.has(p.id));
+    const currentTurnInvestments = state.phase === 'investing'
+      ? investArr.filter(investment => investment.turn === state.currentTurn && investment.result === 'pending')
+      : [];
 
     return `
       <!-- Stats -->
@@ -591,6 +594,15 @@ const MasterApp = (() => {
           <span class="text-[32px] font-bold text-brand-orange">${pendingMaturity.length}</span>
         </div>
       </div>
+
+      ${currentTurnInvestments.length > 0 ? `
+        <div class="bento-card mb-6">
+          <div class="flex items-center justify-between mb-4"><div><h3 class="font-bold text-[18px]">이번 턴 투자</h3><p class="text-brand-gray-text text-[13px] mt-1">다음 턴 전까지 강사가 종목과 금액을 수정할 수 있습니다.</p></div><span class="px-3 py-1 rounded-full bg-brand-blue-light text-brand-blue text-[12px] font-bold">${currentTurnInvestments.length}건</span></div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            ${currentTurnInvestments.map(investment => { const teamName = teamArr.find(team => team.id === investment.teamId)?.name || ''; return `<div class="flex items-center justify-between rounded-xl border border-outline-variant bg-white p-4"><div><div class="flex items-center gap-2"><span class="bg-brand-gray-light text-brand-gray-dark text-[11px] font-bold px-2 py-1 rounded">${teamName}</span><span class="font-medium">${investment.playerName}</span></div><p class="mt-2 text-[13px] text-brand-gray-dark">${investment.productName} · <b>${formatAmount(investment.amount)}만 원</b></p></div><button class="admin-edit-investment h-9 px-3 rounded-lg bg-brand-blue/10 text-brand-blue text-[13px] font-bold" data-inv-id="${investment.id}">수정</button></div>`; }).join('')}
+          </div>
+        </div>
+      ` : ''}
 
       ${isQuarterClosing ? `
         <div class="bento-card mb-6 border border-brand-purple/20 bg-brand-purple-light/30">
@@ -693,7 +705,7 @@ const MasterApp = (() => {
     `;
   }
 
-  function bindDashboardEvents(state, playerArr, teamArr) {
+  function bindDashboardEvents(state, playerArr, teamArr, investments) {
     document.querySelectorAll('.proxy-skip').forEach(btn => {
       btn.addEventListener('click', () => {
         const { playerId, playerName, teamId } = btn.dataset;
@@ -732,6 +744,37 @@ const MasterApp = (() => {
       maturityTurn: turn + MATURITY_TURNS, status: 'active', result: 'pending',
       profitAmount: 0, lossAmount: 0, preserveAmount: 0, proxy: true, createdAt: Date.now(),
     }).then(() => showToast(`${playerName}: ${product.name} ${formatAmount(amount)}만 원 대리 투자`));
+  }
+
+  function showAdminEditInvestmentModal(investment) {
+    const productList = PRODUCTS.map((product, index) => `${index + 1}. ${product.name} (+${(product.profitRate * 100).toFixed(0)}%)`).join('\n');
+    const currentProductIndex = Math.max(0, PRODUCTS.findIndex(product => product.id === investment.productId));
+    const choice = prompt(`${investment.playerName} · 수정할 상품 번호\n\n${productList}`, String(currentProductIndex + 1));
+    if (choice === null) return;
+    const product = PRODUCTS[parseInt(choice, 10) - 1];
+    if (!product) { showToast('상품 번호를 다시 입력해 주세요'); return; }
+    const amountInput = prompt(`투자 금액 (만 원, 최소 ${product.minAmount})`, String(investment.amount));
+    if (amountInput === null) return;
+    const amount = parseInt(amountInput.replace(/[^0-9]/g, ''), 10) || 0;
+    if (amount < product.minAmount) { showToast(`최소 ${formatAmount(product.minAmount)}만 원 이상 입력해 주세요`); return; }
+
+    Promise.all([
+      db.ref(`sessions/${sessionId}/state`).once('value'),
+      db.ref(`sessions/${sessionId}/investments/${investment.id}`).once('value'),
+    ]).then(([stateSnap, investmentSnap]) => {
+      const state = stateSnap.val() || {};
+      const latest = investmentSnap.val();
+      if (!latest || latest.result !== 'pending' || latest.turn !== state.currentTurn || state.phase !== 'investing') {
+        showToast('현재 턴 투자만 수정할 수 있습니다');
+        return;
+      }
+      db.ref(`sessions/${sessionId}/investments/${investment.id}`).update({
+        productId: product.id, productName: product.name, amount,
+        profitRate: product.profitRate, lossRate: product.lossRate,
+        maturityTurn: state.currentTurn + MATURITY_TURNS, updatedAt: Date.now(), editedBy: authId,
+      }).then(() => showToast(`${latest.playerName}: 투자 내용을 수정했습니다`))
+        .catch(() => showToast('투자 내용을 수정하지 못했습니다. 다시 시도해 주세요'));
+    });
   }
 
   // ===== WORLD EVENT =====
@@ -900,6 +943,12 @@ const MasterApp = (() => {
     pending.forEach(inv => {
       if (!byProduct[inv.productId]) byProduct[inv.productId] = [];
       byProduct[inv.productId].push(inv);
+    });
+    document.querySelectorAll('.admin-edit-investment').forEach(button => {
+      button.addEventListener('click', () => {
+        const investment = investments.find(item => item.id === button.dataset.invId);
+        if (investment) showAdminEditInvestmentModal(investment);
+      });
     });
 
     let selectedProducts = {};
