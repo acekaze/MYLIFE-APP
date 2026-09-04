@@ -415,7 +415,7 @@ const MasterApp = (() => {
         <!-- Sidebar -->
         <aside class="w-64 bg-white border-r border-outline-variant/30 p-4 flex flex-col gap-2 shrink-0 overflow-y-auto">
           <div class="mb-4 px-2">
-            <p class="text-brand-gray-text text-[13px]">Turn ${state.currentTurn} · ${state.phase === 'investing' ? '투자 접수' : '정산 중'}</p>
+            <p class="text-brand-gray-text text-[13px]">Turn ${state.currentTurn} · ${state.phase === 'quarterClosing' ? '분기 마감 기록' : state.phase === 'investing' ? '투자 접수' : '정산 중'}</p>
           </div>
           <div class="nav-item ${currentTab === 'dashboard' ? 'active' : ''}" data-tab="dashboard">
             <span class="material-symbols-outlined">analytics</span> 현황
@@ -456,6 +456,8 @@ const MasterApp = (() => {
                 `<button id="endGameBtn" class="w-full h-[44px] bg-brand-red text-white rounded-xl font-bold text-[14px] transition-colors">🏁 게임 종료</button>` :
                 `<button id="nextTurnBtn" class="w-full h-[44px] ${allDone ? 'bg-brand-blue text-white' : 'bg-brand-gray-light text-brand-gray-text cursor-not-allowed'} rounded-xl font-bold text-[14px] transition-colors" ${!allDone ? 'disabled' : ''}>다음 턴 →</button>`
               }
+            ` : state.phase === 'quarterClosing' ? `
+              <button id="advanceQuarterBtn" class="w-full h-[44px] bg-brand-purple text-white rounded-xl font-bold text-[14px] transition-colors">${state.currentTurn + 1}턴 시작 →</button>
             ` : `
               <button id="finishSettleBtn" class="w-full h-[44px] bg-brand-green text-white rounded-xl font-bold text-[14px]">정산 완료 → 투자 재개</button>
             `}
@@ -483,6 +485,8 @@ const MasterApp = (() => {
 
     const nextBtn = document.getElementById('nextTurnBtn');
     if (nextBtn) nextBtn.addEventListener('click', nextTurn);
+    const advanceQuarterBtn = document.getElementById('advanceQuarterBtn');
+    if (advanceQuarterBtn) advanceQuarterBtn.addEventListener('click', nextTurn);
     const finishBtn = document.getElementById('finishSettleBtn');
     if (finishBtn) finishBtn.addEventListener('click', finishSettle);
     const endGameBtn = document.getElementById('endGameBtn');
@@ -543,6 +547,9 @@ const MasterApp = (() => {
     const playersWithBucketRecords = bucketByPlayer.filter(player => player.recordCount > 0).length;
     const totalBucketCount = bucketByPlayer.reduce((sum, player) => sum + player.bucketCount, 0);
     const totalBucketScore = bucketByPlayer.reduce((sum, player) => sum + player.bucketScore, 0);
+    const isQuarterClosing = state.phase === 'quarterClosing';
+    const quarterClosingPeriod = state.quarterClosingPeriod || Math.floor(state.currentTurn / 4);
+    const quarterMissingPlayers = isQuarterClosing ? bucketByPlayer.filter(player => !bucketRecords[player.id]?.[quarterClosingPeriod]) : [];
     const teamStatus = teamArr.map(team => {
       const members = playerArr.filter(p => p.teamId === team.id);
       const done = members.filter(p => thisTurnDone.has(p.id)).length;
@@ -574,6 +581,13 @@ const MasterApp = (() => {
           <span class="text-[32px] font-bold text-brand-orange">${pendingMaturity.length}</span>
         </div>
       </div>
+
+      ${isQuarterClosing ? `
+        <div class="bento-card mb-6 border border-brand-purple/20 bg-brand-purple-light/30">
+          <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-4"><div><h3 class="font-bold text-[18px] text-brand-purple">${quarterClosingPeriod}년차 분기 마감</h3><p class="text-brand-gray-dark text-[13px] mt-1">${state.currentTurn}턴 투자가 끝났습니다. ${state.currentTurn + 1}턴으로 넘어가기 전 버킷 기록을 입력합니다.</p></div><span class="w-fit px-3 py-1 rounded-full bg-white text-brand-purple text-[12px] font-bold">${playerArr.length - quarterMissingPlayers.length}/${playerArr.length}명 입력</span></div>
+          ${quarterMissingPlayers.length > 0 ? `<div class="grid grid-cols-1 md:grid-cols-2 gap-3">${quarterMissingPlayers.map(player => { const teamName = teamArr.find(team => team.id === player.teamId)?.name || ''; return `<div class="flex items-center justify-between rounded-xl bg-white p-3 border border-brand-purple/15"><span><span class="bg-brand-gray-light text-brand-gray-dark text-[11px] font-bold px-2 py-1 rounded mr-2">${teamName}</span><span class="font-medium">${player.name}</span></span><span class="text-[12px] font-bold text-brand-orange">미입력</span></div>`; }).join('')}</div>` : '<div class="rounded-xl bg-white p-4 text-[13px] font-bold text-brand-green">모든 참가자가 버킷 기록을 입력했습니다.</div>'}
+        </div>
+      ` : ''}
 
       <!-- Bucket Status -->
       <div class="bento-card mb-6 border border-brand-purple/15">
@@ -1529,18 +1543,27 @@ const MasterApp = (() => {
 
   function nextTurn() {
     const state = sessionData.state || {};
+    const currentTurn = state.currentTurn || 1;
+    const maxTurns = state.maxTurns || 20;
+    if (state.phase === 'investing' && currentTurn % 4 === 0 && currentTurn < maxTurns) {
+      db.ref(`sessions/${sessionId}/state`).update({ phase: 'quarterClosing', quarterClosingPeriod: currentTurn / 4 }).then(() => {
+        currentTab = 'dashboard';
+        showToast(`${currentTurn / 4}년차 분기 마감 기록을 시작합니다.`);
+      });
+      return;
+    }
     const newTurn = (state.currentTurn || 1) + 1;
     const investments = sessionData.investments || {};
     const investArr = Object.entries(investments).map(([id, inv]) => ({ id, ...inv }));
     const willMature = investArr.filter(i => i.maturityTurn <= newTurn && i.result === 'pending');
 
     if (willMature.length > 0) {
-      db.ref(`sessions/${sessionId}/state`).update({ currentTurn: newTurn, phase: 'settling' }).then(() => {
+      db.ref(`sessions/${sessionId}/state`).update({ currentTurn: newTurn, phase: 'settling', quarterClosingPeriod: null }).then(() => {
         currentTab = 'maturity';
         showToast(`턴 ${newTurn} — 만기 ${willMature.length}건 정산 필요`);
       });
     } else {
-      db.ref(`sessions/${sessionId}/state`).update({ currentTurn: newTurn, phase: 'investing' }).then(() => showToast(`턴 ${newTurn} 시작`));
+      db.ref(`sessions/${sessionId}/state`).update({ currentTurn: newTurn, phase: 'investing', quarterClosingPeriod: null }).then(() => showToast(`턴 ${newTurn} 시작`));
     }
   }
 

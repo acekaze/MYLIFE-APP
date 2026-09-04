@@ -61,7 +61,7 @@ sessions/{CODE}/
   state/
     currentTurn               # 현재 턴 (1부터)
     maxTurns                  # 최대 턴 (기본 20, 관리자 조정 가능)
-    phase                     # 'investing' | 'settling' | 'finalSettling' | 'ended'
+    phase                     # 'investing' | 'quarterClosing' | 'settling' | 'finalSettling' | 'ended'
     autoTurn                  # 자동 턴 넘기기 on/off
     gameEnded                 # 종료 여부
   teams/{teamId}/             # name, createdAt
@@ -127,7 +127,8 @@ trainers/{base64(name_pin)}/
 - 만기 도래 시 주사위 굴리기(직접 선택 또는 랜덤 애니메이션+사운드)
 - 진행 중/완료 투자 목록, "내 결과 공유하기"(개인 지표만, 순위 없음)
 - 연출: 성공 축하(색종이), 턴 전환("턴 N"), 게임 종료("당신의 5년")
-- 투자 진입: 매 턴 앞선 게임 진행 순서를 안내하고, 4·8·12·16·20턴에는 버킷 개수·점수를 함께 저장. 최종 턴에는 남은 현금과 버린 시간 개수도 입력
+- 분기 마감: 4·8·12·16턴 투자 완료 후 다음 턴으로 넘기기 전 `quarterClosing` 상태에서 해당 연차 버킷 개수·만족도 점수를 입력. 누락 항목은 참가자 화면에서 추후 보완 가능
+- 최종 기록: 20턴 투자와 최종 정산이 끝나 게임이 종료된 뒤 5년차 버킷 개수·만족도 점수, 남은 현금, 버린 시간 개수를 입력
 - 현황·최종 산출: 참가자 화면은 본인 누적 버킷 개수·만족도 점수와 최종 기록, 관리자 화면은 참가자별·팀별·전체 현황과 최종 산출의 개인별 버킷·만족도·현금·버린 시간 종합을 표시
 
 ### 관리자 (`master/master.js`)

@@ -9,6 +9,8 @@ const PlayerApp = (() => {
   let playerTeamName = '';
   let currentTurn = 0;
   let maxTurns = 20;
+  let currentPhase = 'investing';
+  let quarterClosingPeriod = null;
 
   function init() {
     const params = new URLSearchParams(window.location.search);
@@ -148,6 +150,8 @@ const PlayerApp = (() => {
       const newTurn = state.currentTurn || 1;
       const newPhase = state.phase || 'investing';
       maxTurns = state.maxTurns || 20;
+      currentPhase = newPhase;
+      quarterClosingPeriod = newPhase === 'quarterClosing' ? (state.quarterClosingPeriod || Math.floor(newTurn / 4)) : null;
 
       // 턴 전환 연출 (투자 접수 상태로 턴이 올라갈 때)
       if (prevTurn !== null && newTurn > prevTurn && newPhase === 'investing') {
@@ -168,6 +172,8 @@ const PlayerApp = (() => {
         const state = snap.val() || {};
         currentTurn = state.currentTurn || 1;
         maxTurns = state.maxTurns || 20;
+        currentPhase = state.phase || 'investing';
+        quarterClosingPeriod = currentPhase === 'quarterClosing' ? (state.quarterClosingPeriod || Math.floor(currentTurn / 4)) : null;
         renderMain(state.phase || 'investing');
       });
     });
@@ -176,6 +182,8 @@ const PlayerApp = (() => {
         const state = snap.val() || {};
         currentTurn = state.currentTurn || 1;
         maxTurns = state.maxTurns || 20;
+        currentPhase = state.phase || 'investing';
+        quarterClosingPeriod = currentPhase === 'quarterClosing' ? (state.quarterClosingPeriod || Math.floor(currentTurn / 4)) : null;
         renderMain(state.phase || 'investing');
       });
     });
@@ -190,7 +198,6 @@ const PlayerApp = (() => {
   function renderMain(phase) {
     const renderTurn = currentTurn;
     const preInvestKey = `${renderTurn}_${playerId}`;
-    const currentPeriod = Math.ceil(renderTurn / 4);
     const existingModal = document.getElementById('preInvestModal');
     if (existingModal) existingModal.remove();
 
@@ -243,7 +250,7 @@ const PlayerApp = (() => {
           <div class="bg-white px-4 py-3 shadow-sm">
             <div class="flex items-center justify-between mb-2">
               <span class="text-[13px] font-bold text-on-surface">턴 ${currentTurn} <span class="text-brand-gray-text font-normal">/ ${maxTurns}</span></span>
-              <span class="text-[12px] text-brand-gray-text">${gameEnded ? '🏁 게임 종료' : phase === 'investing' ? '투자 접수 중' : '결과 정산 중'}</span>
+              <span class="text-[12px] text-brand-gray-text">${gameEnded ? '🏁 게임 종료' : phase === 'quarterClosing' ? '분기 마감 기록 중' : phase === 'investing' ? '투자 접수 중' : '결과 정산 중'}</span>
             </div>
             <div class="h-1.5 bg-surface-container rounded-full overflow-hidden">
               <div class="h-full bg-brand-blue rounded-full transition-all" style="width:${progressPct}%"></div>
@@ -252,8 +259,9 @@ const PlayerApp = (() => {
 
           <!-- Content -->
           <main class="p-4 pb-20 space-y-4">
-            ${renderBucketStatus(bucketTotals, bucketRecordCount)}
-            ${gameEnded ? renderGameEndedMessage(finalCash) : ''}
+            ${renderBucketStatus(bucketTotals, bucketRecordCount, bucketRecords)}
+            ${phase === 'quarterClosing' ? renderQuarterClosing(quarterClosingPeriod, bucketRecords) : ''}
+            ${gameEnded ? renderGameEndedMessage(finalCash, bucketRecords) : ''}
             ${settled.length > 0 || adjustments.length > 0 ? renderHeroSummary(investments.length, totalProfit, totalLoss + eventAdjustmentTotal, netResult) : ''}
             ${!gameEnded && myMatured.length > 0 ? renderDiceSection(myMatured) : ''}
             ${!gameEnded && phase === 'investing' ? renderTodoBanner() : ''}
@@ -268,16 +276,35 @@ const PlayerApp = (() => {
       if (!gameEnded && phase === 'investing') bindInvestForm();
       if (!gameEnded && myMatured.length > 0) bindDice(myMatured);
       if (settled.length > 0) bindShareResult();
+      document.getElementById('openBucketSupplementBtn')?.addEventListener('click', () => {
+        openBucketRecordModal(bucketRecords, getMissingBucketPeriods(bucketRecords));
+      });
+      if (phase === 'quarterClosing') {
+        const closePeriod = quarterClosingPeriod || Math.floor(currentTurn / 4);
+        document.getElementById('openQuarterRecordBtn')?.addEventListener('click', () => {
+          openBucketRecordModal(bucketRecords, [closePeriod]);
+        });
+        if (!bucketRecords[String(closePeriod)]) openBucketRecordModal(bucketRecords, [closePeriod]);
+      }
+      if (gameEnded) {
+        const finalPeriod = Math.floor(maxTurns / 4);
+        const needsFinalRecord = !finalCash || finalCash.discardedTimeCount === undefined || !bucketRecords[String(finalPeriod)];
+        document.getElementById('openFinalRecordBtn')?.addEventListener('click', () => {
+          openFinalRecordModal(bucketRecords, finalCash, finalPeriod);
+        });
+        if (needsFinalRecord) openFinalRecordModal(bucketRecords, finalCash, finalPeriod);
+      }
 
-      const needsQuarterRecord = renderTurn % 4 === 0 && !bucketRecords[String(currentPeriod)];
-      const needsFinalInputs = renderTurn === maxTurns && (!finalCash || finalCash.discardedTimeCount === undefined);
-      if (!gameEnded && phase === 'investing' && (!preInvestSnap.exists() || needsQuarterRecord || needsFinalInputs)) {
-        showPreInvestmentNotice(bucketRecords, currentPeriod, finalCash);
+      if (!gameEnded && phase === 'investing' && !preInvestSnap.exists()) {
+        showPreInvestmentNotice();
       }
     });
   }
 
-  function renderGameEndedMessage(finalCash) {
+  function renderGameEndedMessage(finalCash, bucketRecords) {
+    const finalPeriod = Math.floor(maxTurns / 4);
+    const finalBucketRecord = bucketRecords[String(finalPeriod)];
+    const needsFinalRecord = !finalCash || finalCash.discardedTimeCount === undefined || !finalBucketRecord;
     return `
       <div class="bg-white rounded-2xl p-6 shadow-card text-center">
         <div class="text-[40px] mb-3">🏁</div>
@@ -285,6 +312,7 @@ const PlayerApp = (() => {
         <p class="text-brand-gray-text text-[14px]">모든 투자가 정산되었습니다.<br>아래에서 최종 결과를 확인하세요.</p>
         <p class="text-brand-gray-text text-[13px] mt-3">버킷 기록은 최종 결과에 포함됩니다.</p>
         ${finalCash ? `<p class="text-brand-purple text-[13px] font-bold mt-2">최종 남은 현금 ${formatAmount(Number(finalCash.amount) || 0)}만 원 · 버린 시간 ${Number(finalCash.discardedTimeCount) || 0}개</p>` : ''}
+        ${needsFinalRecord ? '<button id="openFinalRecordBtn" class="mt-4 h-[42px] w-full rounded-xl bg-brand-blue text-white text-[14px] font-bold">최종 기록 입력</button>' : ''}
       </div>
     `;
   }
@@ -296,7 +324,20 @@ const PlayerApp = (() => {
     }), { count: 0, score: 0 });
   }
 
-  function renderBucketStatus(totals, recordCount) {
+  function getCompletedBucketPeriods() {
+    if (currentPhase === 'ended') return Math.floor(maxTurns / 4);
+    if (currentPhase === 'quarterClosing') return Math.floor(currentTurn / 4);
+    return Math.floor((currentTurn - 1) / 4);
+  }
+
+  function getMissingBucketPeriods(bucketRecords) {
+    const completedPeriods = getCompletedBucketPeriods();
+    return Array.from({ length: completedPeriods }, (_, index) => index + 1)
+      .filter(period => !bucketRecords[String(period)]);
+  }
+
+  function renderBucketStatus(totals, recordCount, bucketRecords) {
+    const missingPeriods = getMissingBucketPeriods(bucketRecords);
     return `
       <section class="rounded-2xl bg-brand-purple-light/60 border border-brand-purple/15 p-4 shadow-card" aria-label="나의 버킷 현황">
         <div class="flex items-center justify-between mb-3">
@@ -307,20 +348,101 @@ const PlayerApp = (() => {
           <div class="rounded-xl bg-white/80 px-4 py-3"><p class="text-[12px] text-brand-gray-text">누적 개수</p><p class="mt-1 text-[22px] font-bold text-on-surface">${totals.count}<span class="ml-1 text-[13px] font-medium text-brand-gray-text">개</span></p></div>
           <div class="rounded-xl bg-white/80 px-4 py-3"><p class="text-[12px] text-brand-gray-text">누적 만족도 점수</p><p class="mt-1 text-[22px] font-bold text-on-surface">${totals.score.toLocaleString('ko-KR')}<span class="ml-1 text-[13px] font-medium text-brand-gray-text">점</span></p></div>
         </div>
+        ${missingPeriods.length > 0 ? `<button id="openBucketSupplementBtn" class="mt-3 h-[40px] w-full rounded-xl bg-white text-brand-purple text-[13px] font-bold border border-brand-purple/20">누락 기록 입력 (${missingPeriods.map(period => `${period}년차`).join(', ')})</button>` : ''}
       </section>
     `;
   }
 
-  function showPreInvestmentNotice(bucketRecords, period, finalCash) {
+  function renderQuarterClosing(period, bucketRecords) {
+    const record = bucketRecords[String(period)];
+    return `
+      <section class="rounded-2xl bg-brand-purple-light/60 border border-brand-purple/20 p-5 shadow-card text-center">
+        <div class="text-[28px] mb-2">📝</div>
+        <h2 class="font-bold text-[18px]">${period}년차 마감</h2>
+        <p class="text-brand-gray-dark text-[14px] mt-2">다음 턴이 시작되기 전, 이번 기간의 버킷 기록을 입력합니다.</p>
+        ${record ? `<div class="mt-4 rounded-xl bg-white/80 p-3 text-[13px] font-bold text-brand-purple">기록 완료 · ${record.bucketCount}개 · ${record.bucketScore}점</div>` : '<button id="openQuarterRecordBtn" class="mt-4 h-[44px] w-full rounded-xl bg-brand-purple text-white text-[14px] font-bold">버킷 기록 입력</button>'}
+      </section>
+    `;
+  }
+
+  function openBucketRecordModal(bucketRecords, periods) {
+    if (periods.length === 0 || document.getElementById('bucketRecordModal')) return;
+    const modal = document.createElement('div');
+    modal.id = 'bucketRecordModal';
+    const options = periods.map(period => `<option value="${period}">${period}년차</option>`).join('');
+    modal.innerHTML = `
+      <div style="position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:9998; display:flex; align-items:flex-end; justify-content:center;">
+        <section style="background:#fff; width:100%; max-width:390px; border-radius:16px 16px 0 0; padding:20px; box-shadow:0 -8px 28px rgba(0,0,0,.18);">
+          <p style="color:#8B5CF6; font-size:13px; font-weight:700; margin:0;">버킷 기록</p>
+          <h2 style="font-size:20px; margin:4px 0 16px;">마감된 기간을 입력하세요</h2>
+          ${periods.length > 1 ? `<label style="display:block; font-size:12px; font-weight:500; color:#4E5968; margin-bottom:12px;">입력할 연차<select id="bucketPeriodInput" style="box-sizing:border-box; width:100%; height:44px; margin-top:6px; padding:0 12px; border:1px solid #E5E8EB; border-radius:12px; background:#fff; font-size:15px;">${options}</select></label>` : `<input id="bucketPeriodInput" type="hidden" value="${periods[0]}">`}
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+            <label style="font-size:12px; font-weight:500; color:#4E5968;">이룬 버킷 개수<input id="bucketCountInput" type="number" min="0" inputmode="numeric" style="box-sizing:border-box; width:100%; height:48px; margin-top:6px; padding:0 12px; border:1px solid #E5E8EB; border-radius:12px; font-size:15px;" placeholder="0"></label>
+            <label style="font-size:12px; font-weight:500; color:#4E5968;">만족도 점수<input id="bucketScoreInput" type="number" min="0" inputmode="numeric" style="box-sizing:border-box; width:100%; height:48px; margin-top:6px; padding:0 12px; border:1px solid #E5E8EB; border-radius:12px; font-size:15px;" placeholder="0"></label>
+          </div>
+          <div style="display:flex; gap:8px; margin-top:20px;"><button id="deferBucketRecordBtn" style="height:44px; flex:1; border:0; border-radius:12px; background:#F2F4F6; color:#4E5968; font-weight:700;">나중에</button><button id="saveBucketRecordBtn" style="height:44px; flex:2; border:0; border-radius:12px; background:#8B5CF6; color:#fff; font-weight:700;">기록 저장</button></div>
+        </section>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    document.getElementById('bucketCountInput').focus();
+    document.getElementById('deferBucketRecordBtn').addEventListener('click', () => modal.remove());
+    document.getElementById('saveBucketRecordBtn').addEventListener('click', () => {
+      const period = Number(document.getElementById('bucketPeriodInput').value);
+      const countInput = document.getElementById('bucketCountInput');
+      const scoreInput = document.getElementById('bucketScoreInput');
+      if (countInput.value === '' || scoreInput.value === '') { showToast('버킷 개수와 만족도 점수를 입력해 주세요'); return; }
+      const count = Number(countInput.value);
+      const score = Number(scoreInput.value);
+      if (!Number.isInteger(count) || count < 0 || !Number.isInteger(score) || score < 0) { showToast('버킷 개수와 만족도 점수를 0 이상으로 입력해 주세요'); return; }
+      db.ref(`sessions/${sessionId}/bucketRecords/${playerId}/${period}`).set({ period, turn: period * 4, bucketCount: count, bucketScore: score, updatedAt: Date.now() })
+        .then(() => { modal.remove(); renderMain(currentPhase); })
+        .catch(() => showToast('기록을 저장하지 못했습니다. 다시 시도해 주세요'));
+    });
+  }
+
+  function openFinalRecordModal(bucketRecords, finalCash, finalPeriod) {
+    if (document.getElementById('finalRecordModal')) return;
+    const finalBucket = bucketRecords[String(finalPeriod)];
+    const modal = document.createElement('div');
+    modal.id = 'finalRecordModal';
+    modal.innerHTML = `
+      <div style="position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:9998; display:flex; align-items:flex-end; justify-content:center;">
+        <section style="background:#fff; width:100%; max-width:390px; max-height:88vh; overflow-y:auto; border-radius:16px 16px 0 0; padding:20px; box-shadow:0 -8px 28px rgba(0,0,0,.18);">
+          <p style="color:#3182F6; font-size:13px; font-weight:700; margin:0;">게임 종료 후 최종 기록</p>
+          <h2 style="font-size:20px; margin:4px 0 16px;">마지막 기록을 입력하세요</h2>
+          ${!finalBucket ? `<div style="padding:14px; border-radius:12px; background:#EDE9FE; margin-bottom:12px;"><p style="font-size:14px; font-weight:700; margin:0;">${finalPeriod}년차 버킷 기록</p><div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;"><label style="font-size:12px; color:#4E5968;">이룬 개수<input id="finalBucketCountInput" type="number" min="0" inputmode="numeric" style="box-sizing:border-box; width:100%; height:46px; margin-top:5px; padding:0 10px; border:1px solid #E5E8EB; border-radius:10px;" placeholder="0"></label><label style="font-size:12px; color:#4E5968;">만족도 점수<input id="finalBucketScoreInput" type="number" min="0" inputmode="numeric" style="box-sizing:border-box; width:100%; height:46px; margin-top:5px; padding:0 10px; border:1px solid #E5E8EB; border-radius:10px;" placeholder="0"></label></div></div>` : ''}
+          <div style="padding:14px; border-radius:12px; background:#E8F4FD;"><p style="font-size:14px; font-weight:700; margin:0;">최종 자산과 시간</p><div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;"><label style="font-size:12px; color:#4E5968;">남은 현금 (만 원)<input id="finalCashInput" type="number" min="0" inputmode="numeric" value="${finalCash ? Number(finalCash.amount) || 0 : ''}" style="box-sizing:border-box; width:100%; height:46px; margin-top:5px; padding:0 10px; border:1px solid #E5E8EB; border-radius:10px;" placeholder="0"></label><label style="font-size:12px; color:#4E5968;">버린 시간 개수<input id="discardedTimeInput" type="number" min="0" inputmode="numeric" value="${finalCash?.discardedTimeCount !== undefined ? Number(finalCash.discardedTimeCount) : ''}" style="box-sizing:border-box; width:100%; height:46px; margin-top:5px; padding:0 10px; border:1px solid #E5E8EB; border-radius:10px;" placeholder="0"></label></div></div>
+          <div style="display:flex; gap:8px; margin-top:20px;"><button id="deferFinalRecordBtn" style="height:44px; flex:1; border:0; border-radius:12px; background:#F2F4F6; color:#4E5968; font-weight:700;">나중에</button><button id="saveFinalRecordBtn" style="height:44px; flex:2; border:0; border-radius:12px; background:#3182F6; color:#fff; font-weight:700;">최종 기록 저장</button></div>
+        </section>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    document.getElementById('deferFinalRecordBtn').addEventListener('click', () => modal.remove());
+    document.getElementById('saveFinalRecordBtn').addEventListener('click', () => {
+      const finalCashInput = document.getElementById('finalCashInput');
+      const discardedTimeInput = document.getElementById('discardedTimeInput');
+      if (finalCashInput.value === '' || discardedTimeInput.value === '') { showToast('남은 현금과 버린 시간 개수를 입력해 주세요'); return; }
+      const amount = Number(finalCashInput.value);
+      const discardedTimeCount = Number(discardedTimeInput.value);
+      if (!Number.isInteger(amount) || amount < 0 || !Number.isInteger(discardedTimeCount) || discardedTimeCount < 0) { showToast('남은 현금과 버린 시간 개수를 0 이상으로 입력해 주세요'); return; }
+      const updates = { [`sessions/${sessionId}/finalCash/${playerId}`]: { amount, discardedTimeCount, turn: maxTurns, updatedAt: Date.now() } };
+      if (!finalBucket) {
+        const finalBucketCountInput = document.getElementById('finalBucketCountInput');
+        const finalBucketScoreInput = document.getElementById('finalBucketScoreInput');
+        if (finalBucketCountInput.value === '' || finalBucketScoreInput.value === '') { showToast('버킷 개수와 만족도 점수를 입력해 주세요'); return; }
+        const count = Number(finalBucketCountInput.value);
+        const score = Number(finalBucketScoreInput.value);
+        if (!Number.isInteger(count) || count < 0 || !Number.isInteger(score) || score < 0) { showToast('버킷 개수와 만족도 점수를 0 이상으로 입력해 주세요'); return; }
+        updates[`sessions/${sessionId}/bucketRecords/${playerId}/${finalPeriod}`] = { period: finalPeriod, turn: maxTurns, bucketCount: count, bucketScore: score, updatedAt: Date.now() };
+      }
+      db.ref().update(updates).then(() => { modal.remove(); renderMain(currentPhase); }).catch(() => showToast('최종 기록을 저장하지 못했습니다. 다시 시도해 주세요'));
+    });
+  }
+
+  function showPreInvestmentNotice() {
     if (document.getElementById('preInvestModal')) return;
 
-    const isQuarterTurn = currentTurn % 4 === 0;
-    const isFinalTurn = currentTurn === maxTurns;
-    const hasCurrentRecord = Boolean(bucketRecords[String(period)]);
-    const hasFinalCash = Boolean(finalCash);
-    const hasFinalDiscardedTime = finalCash?.discardedTimeCount !== undefined && Number.isInteger(Number(finalCash.discardedTimeCount));
-    const needsFinalInputs = !hasFinalCash || !hasFinalDiscardedTime;
-    const totals = getBucketTotals(bucketRecords);
     const modal = document.createElement('div');
     modal.id = 'preInvestModal';
     modal.innerHTML = `
@@ -337,43 +459,13 @@ const PlayerApp = (() => {
               </li>
             `).join('')}
           </ol>
-          ${isQuarterTurn && !hasCurrentRecord ? `
-            <div style="margin:0 0 16px; padding:16px; border:1px solid rgba(139,92,246,.2); border-radius:12px; background:rgba(237,233,254,.5);">
-              <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
-                <h3 style="font-size:14px; font-weight:700; margin:0;">${period}년차 버킷 기록</h3>
-                <span style="font-size:12px; font-weight:700; color:#8B5CF6;">현재 누적 ${totals.count}개 · ${totals.score}점</span>
-              </div>
-              <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px;">
-                <label style="display:block; font-size:12px; font-weight:500; color:#4E5968;">이번에 이룬 개수
-                  <input id="bucketCountInput" type="number" min="0" inputmode="numeric" required style="box-sizing:border-box; width:100%; height:48px; margin-top:6px; padding:0 12px; border:1px solid #E5E8EB; border-radius:12px; background:#fff; font-size:15px;" placeholder="0">
-                </label>
-                <label style="display:block; font-size:12px; font-weight:500; color:#4E5968;">이번 버킷 점수
-                  <input id="bucketScoreInput" type="number" min="0" inputmode="numeric" required style="box-sizing:border-box; width:100%; height:48px; margin-top:6px; padding:0 12px; border:1px solid #E5E8EB; border-radius:12px; background:#fff; font-size:15px;" placeholder="0">
-                </label>
-              </div>
-            </div>
-          ` : ''}
-          ${isFinalTurn && needsFinalInputs ? `
-            <div style="margin:0 0 16px; padding:16px; border:1px solid rgba(49,130,246,.2); border-radius:12px; background:rgba(232,244,253,.7);">
-              <h3 style="font-size:14px; font-weight:700; margin:0;">최종 기록</h3>
-              <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px;">
-                <label style="display:block; font-size:12px; font-weight:500; color:#4E5968;">남은 현금 (만 원)
-                  <input id="finalCashInput" type="number" min="0" inputmode="numeric" required value="${hasFinalCash ? Number(finalCash.amount) || 0 : ''}" style="box-sizing:border-box; width:100%; height:48px; margin-top:6px; padding:0 12px; border:1px solid #E5E8EB; border-radius:12px; background:#fff; font-size:15px;" placeholder="0">
-                </label>
-                <label style="display:block; font-size:12px; font-weight:500; color:#4E5968;">버린 시간 개수
-                  <input id="discardedTimeInput" type="number" min="0" inputmode="numeric" required value="${hasFinalDiscardedTime ? Number(finalCash.discardedTimeCount) : ''}" style="box-sizing:border-box; width:100%; height:48px; margin-top:6px; padding:0 12px; border:1px solid #E5E8EB; border-radius:12px; background:#fff; font-size:15px;" placeholder="0">
-                </label>
-              </div>
-            </div>
-          ` : ''}
           <button id="startInvestingBtn" type="button" style="width:100%; height:48px; border:0; border-radius:12px; background:#3182F6; color:#fff; font-size:15px; font-weight:700; cursor:pointer;">앞 단계 완료 · 투자 시작</button>
         </section>
       </div>
     `;
     document.body.appendChild(modal);
 
-    const focusTargetId = isQuarterTurn && !hasCurrentRecord ? 'bucketCountInput' : isFinalTurn && needsFinalInputs ? 'finalCashInput' : 'startInvestingBtn';
-    const focusTarget = document.getElementById(focusTargetId);
+    const focusTarget = document.getElementById('startInvestingBtn');
     if (focusTarget) focusTarget.focus();
 
     document.getElementById('startInvestingBtn').addEventListener('click', () => {
@@ -382,41 +474,6 @@ const PlayerApp = (() => {
           playerId, turn: currentTurn, completedAt: Date.now(),
         },
       };
-
-      if (isQuarterTurn && !hasCurrentRecord) {
-        const countInput = document.getElementById('bucketCountInput');
-        const scoreInput = document.getElementById('bucketScoreInput');
-        if (countInput.value === '' || scoreInput.value === '') {
-          showToast('버킷 개수와 점수를 입력해 주세요');
-          return;
-        }
-        const count = Number(countInput.value);
-        const score = Number(scoreInput.value);
-        if (!Number.isInteger(count) || count < 0 || !Number.isInteger(score) || score < 0) {
-          showToast('버킷 개수와 점수를 0 이상으로 입력해 주세요');
-          return;
-        }
-        updates[`sessions/${sessionId}/bucketRecords/${playerId}/${period}`] = {
-          period, turn: currentTurn, bucketCount: count, bucketScore: score, updatedAt: Date.now(),
-        };
-      }
-      if (isFinalTurn && needsFinalInputs) {
-        const finalCashInput = document.getElementById('finalCashInput');
-        const discardedTimeInput = document.getElementById('discardedTimeInput');
-        if (finalCashInput.value === '' || discardedTimeInput.value === '') {
-          showToast('남은 현금과 버린 시간 개수를 입력해 주세요');
-          return;
-        }
-        const amount = Number(finalCashInput.value);
-        const discardedTimeCount = Number(discardedTimeInput.value);
-        if (!Number.isInteger(amount) || amount < 0 || !Number.isInteger(discardedTimeCount) || discardedTimeCount < 0) {
-          showToast('남은 현금과 버린 시간 개수를 0 이상으로 입력해 주세요');
-          return;
-        }
-        updates[`sessions/${sessionId}/finalCash/${playerId}`] = {
-          amount, discardedTimeCount, turn: currentTurn, updatedAt: Date.now(),
-        };
-      }
 
       const startButton = document.getElementById('startInvestingBtn');
       startButton.disabled = true;
