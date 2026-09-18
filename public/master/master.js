@@ -814,7 +814,7 @@ const MasterApp = (() => {
     const productIds = Object.keys(byProduct);
 
     if (productIds.length === 0) {
-      return `<div class="bento-card text-center py-12 text-brand-gray-text">진행 중인 투자가 없어 월드 이벤트를 발동할 수 없습니다.</div>`;
+      return `<div class="bento-card text-center py-12 text-brand-gray-text">진행 중인 투자가 없습니다.${sessionData.gameVersion === 'integrated-v3' ? '<br>위에서 이벤트를 공개하거나 <b>투자 영향 없이 넘기기</b>를 선택할 수 있습니다.' : ''}</div>`;
     }
 
     return `
