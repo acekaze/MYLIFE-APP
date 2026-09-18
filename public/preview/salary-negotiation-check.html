@@ -13,7 +13,7 @@ function negotiationScreen(){
  popup.innerHTML='<section style="width:min(560px,100%);background:white;color:#17243d;border-radius:24px;padding:32px;text-align:center;font-size:20px">'+c.innerHTML+(r?'<button id="confirmNegotiation" style="width:100%;padding:20px">결과 확인 · 마감 완료</button>':'')+'</section>';
  c.innerHTML='<h2>분기 마감</h2><p>연봉협상을 진행하세요.</p>';document.body.append(popup);
  if(!r&&(window.abilityCount||0)>0){const wheel=document.createElement('div');wheel.id='salaryWheel';el('rollNegotiation').before(wheel);SalaryRoulette.mount(wheel);}
- if(!r){el('rollNegotiation').disabled=busy;el('rollNegotiation').onclick=()=>{el('rollNegotiation').disabled=true;rollNegotiation();};}
+ if(!r){el('rollNegotiation').disabled=busy;el('rollNegotiation').onclick=()=>{SalaryRoulette.unlock();el('rollNegotiation').disabled=true;rollNegotiation();};}
  else el('confirmNegotiation').onclick=async()=>{const period=closingTurn;el('confirmNegotiation').disabled=true;try{await root.child('negotiations/'+period+'/acknowledged').set(true);negotiations[period].acknowledged=true;render();}catch(e){el('confirmNegotiation').disabled=false;}};
 
 }
