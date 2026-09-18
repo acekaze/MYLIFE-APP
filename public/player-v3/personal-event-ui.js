@@ -1,0 +1,24 @@
+const PersonalEventUI=(()=>{
+  let busy=false;
+  const escape=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  function describe(delta){return ['cash','time','score'].filter(k=>delta[k]).map(k=>({cash:'현금',time:'시간',score:'만족도'}[k])+' '+(delta[k]>0?'+':'')+delta[k]+({cash:'만 원',time:'개',score:'점'}[k])).join(' · ')||'자원 변화 없음';}
+  async function run(sid,pid,turn,kind,option){if(busy)return;busy=true;try{const ref=firebase.database().ref('sessions/'+sid);await ref.once('value');const random=Math.random();const result=await ref.transaction(s=>{if(!s)return;PersonalEventEngine[kind](s,pid,turn,option===undefined?random:option,random);return s;});if(!result.committed)throw Error('이벤트를 저장하지 못했습니다.');return result.snapshot.val().integrated[pid].eventDraws[turn];}finally{busy=false;}}
+  function show({sid,pid,turn,record,resources,onDone,onRefresh}){
+    document.getElementById('personalEventPopup')?.remove();const popup=document.createElement('div');popup.id='personalEventPopup';popup.setAttribute('role','dialog');popup.setAttribute('aria-modal','true');popup.setAttribute('aria-label','개인 이벤트');popup.style.cssText='position:fixed;inset:0;z-index:1100;background:#102238f5;color:white;overflow:auto;padding:24px;box-sizing:border-box';const card=record&&PersonalEventEngine.find(record.cardId);
+    popup.innerHTML='<section style="max-width:620px;margin:20px auto"><p>Q'+turn+' · 개인 이벤트</p><div id="eventDisplay"></div><p id="eventError" role="status" style="color:#ffc29c"></p></section>';document.body.append(popup);const box=popup.querySelector('#eventDisplay');
+    async function action(kind,option){popup.querySelectorAll('button').forEach(b=>b.disabled=true);try{const updated=await run(sid,pid,turn,kind,option);if(kind==='apply')onDone();else onRefresh(updated);}catch(e){const error=document.querySelector('#personalEventPopup #eventError');if(error)error.textContent=e.message;popup.querySelectorAll('button').forEach(b=>b.disabled=false);}}
+    if(!card){box.innerHTML='<button id="revealActualEvent" style="width:100%;min-height:350px;border:2px solid #c9ab66;border-radius:24px;background:#1e6f60;color:white;font-size:26px">개인 이벤트<br><small style="display:block;font-size:16px;margin-top:20px">눌러서 카드를 공개하세요</small></button>';box.querySelector('button').disabled=busy;box.querySelector('button').onclick=()=>action('draw');return;}
+    box.innerHTML='<h2>'+escape(card.title)+'</h2><p>'+ (card.college?'대학생 카드 · ':'')+(card.keep?'KEEP · 보관 카드':'')+'</p><img src="'+card.image+'" alt="'+escape(card.title)+' 원본 카드" style="display:block;width:min(300px,100%);margin:16px auto;border-radius:18px"><div id="effects" style="background:white;color:#17243d;border-radius:16px;padding:20px"></div><p>서로에게 카드를 보여주며 이야기한 뒤 진행하세요.</p>';
+    const effects=box.querySelector('#effects');
+    if(record.status==='applied'){effects.textContent='이미 효과가 적용되었습니다.';const b=document.createElement('button');b.textContent='임금 수령으로';b.onclick=onDone;box.append(b);return;}
+    if(card.kind==='choice'){effects.innerHTML='<h3>하나를 선택하세요</h3>'+card.values.map((v,i)=>'<button data-choice="'+i+'" style="display:block;width:100%;margin:8px 0">시간 '+(i+1)+'개 사용 → 현금 +'+v+'만 원</button>').join('');effects.querySelectorAll('[data-choice]').forEach(b=>b.onclick=()=>action('apply',+b.dataset.choice));return;}
+    const delta=PersonalEventEngine.effect(card,resources.salaryLevel||6);effects.innerHTML='<h3>'+describe(delta)+'</h3>'+(card.kind==='tier'?'<p>온라인 적용: 연봉 '+resources.salaryLevel+'단계 → '+describe(delta)+'</p>':'')+(card.kind==='team'?'<p>같은 팀 전원에게 한 번씩 적용됩니다.</p>':'')+'<p>부족한 현금·시간은 다음 턴 수령 때 차감됩니다.</p>';
+    if(card.kind==='replace'){
+      const candidate=BUCKET_CATALOG.find(c=>c.id===record.candidateId);
+      if(!candidate){effects.insertAdjacentHTML('beforeend','<h3>교체할 버킷 1장을 고르세요</h3>'+(resources.hand||[]).map((c,i)=>'<button data-swap="'+i+'" style="display:block;width:100%;margin:6px 0">'+escape(c[0])+'</button>').join(''));effects.querySelectorAll('[data-swap]').forEach(b=>b.onclick=()=>action('replacement',+b.dataset.swap));return;}
+      effects.insertAdjacentHTML('beforeend','<p>뽑기 '+record.drawCount+'/5</p><h3>'+escape(candidate.title)+'</h3><p>'+candidate.cash+'만 원 · 시간 '+candidate.time+'개 · 만족도 '+candidate.score+'점</p><button id="redraw">다시 뽑기</button><button id="acceptSwap">이 카드로 교체 · 공유 완료</button>');effects.querySelector('#redraw').disabled=record.drawCount>=5;effects.querySelector('#redraw').onclick=()=>action('replacement',record.swapIndex);effects.querySelector('#acceptSwap').onclick=()=>action('apply',0);return;
+    }
+    const apply=document.createElement('button');apply.textContent='공유 완료 · 효과 적용';apply.style.cssText='width:100%;padding:18px;margin-top:20px';apply.disabled=busy;apply.onclick=()=>action('apply',0);box.append(apply);
+  }
+  return {show,describe};
+})();
