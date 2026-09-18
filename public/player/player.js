@@ -16,7 +16,8 @@ const PlayerApp = (() => {
     const requested = new URLSearchParams(location.search).get('module') === 'investment';
     const turn = session.state?.currentTurn || 1;
     integratedMode = session.gameVersion === 'integrated-v3';
-    return requested && (session.state?.phase === 'settling' || session.state?.phase === 'finalSettling' || Number(session.integrated?.[playerId]?.progress?.[turn] || 0) >= 5);
+    const settlement=SettlementFlow.inspect(session,playerId);
+    return requested && (settlement.pending.length>0 || settlement.results.length>0 || Number(session.integrated?.[playerId]?.progress?.[turn] || 0) >= 5);
   }
 
   function init() {
@@ -166,14 +167,11 @@ const PlayerApp = (() => {
   let prevPhase = null;
   function enterSession() {
     IntegratedAssets.watch(sessionId);
+    if(integratedMode)SettlementFlow.watch(sessionId,playerId,false);
     db.ref(`sessions/${sessionId}/state`).on('value', snap => {
       const state = snap.val() || {};
       const newTurn = state.currentTurn || 1;
       const newPhase = state.phase || 'investing';
-      if (integratedMode && prevPhase === 'settling' && newPhase === 'investing') {
-        location.replace('/player-v3/?session=' + encodeURIComponent(sessionId));
-        return;
-      }
       if (new URLSearchParams(location.search).get('module') === 'investment') {
         if (moduleEntryTurn === null) moduleEntryTurn = newTurn;
         if (newTurn !== moduleEntryTurn || newPhase === 'quarterClosing') {
