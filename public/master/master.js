@@ -369,6 +369,7 @@ const MasterApp = (() => {
   }
 
   function enterSession() {
+    IntegratedAssets.watch(sessionId);
     db.ref(`sessions/${sessionId}`).on('value', snap => {
       if (!snap.exists()) {
         showToast('세션을 찾을 수 없습니다');
@@ -388,8 +389,8 @@ const MasterApp = (() => {
     const investments = sessionData.investments || {};
     const teams = sessionData.teams || {};
     const skips = sessionData.skips || {};
-    const bucketRecords = sessionData.bucketRecords || {};
-    const finalCash = sessionData.finalCash || {};
+    const bucketRecords = sessionData.gameVersion==='integrated-v3' ? Object.fromEntries(Object.entries(sessionData.integrated||{}).map(([id,p])=>[id,{automatic:{bucketCount:(p.achieved||[]).length,bucketScore:p.score||0}}])) : sessionData.bucketRecords || {};
+    const finalCash = sessionData.gameVersion==='integrated-v3' ? Object.fromEntries(Object.entries(sessionData.integrated||{}).map(([id,p])=>[id,{amount:p.cash||0,discardedTimeCount:p.discardedTimeCount||0}])) : sessionData.finalCash || {};
     const eventAdjustments = sessionData.eventAdjustments || {};
     const adminDisplayName = sessionData.adminNames?.[authId] || authName || '총관리자';
     const playerCount = Object.keys(players).length;
@@ -1618,6 +1619,7 @@ const MasterApp = (() => {
       });
       return;
     }
+    if(sessionData.gameVersion==='integrated-v3'&&state.phase==='quarterClosing'&&Object.keys(sessionData.players||{}).some(id=>sessionData.integrated?.[id]?.negotiations?.[currentTurn]?.status!=='settled')){showToast('참가자의 연봉협상이 끝난 뒤 진행해 주세요');return;}
     const newTurn = (state.currentTurn || 1) + 1;
     const investments = sessionData.investments || {};
     const investArr = Object.entries(investments).map(([id, inv]) => ({ id, ...inv }));

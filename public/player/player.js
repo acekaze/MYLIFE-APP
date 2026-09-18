@@ -12,6 +12,13 @@ const PlayerApp = (() => {
   let currentPhase = 'investing';
   let quarterClosingPeriod = null;
 
+  function canUseInvestmentModule(session) {
+    const requested = new URLSearchParams(location.search).get('module') === 'investment';
+    const turn = session.state?.currentTurn || 1;
+    integratedMode = session.gameVersion === 'integrated-v3';
+    return requested && (session.state?.phase === 'settling' || session.state?.phase === 'finalSettling' || Number(session.integrated?.[playerId]?.progress?.[turn] || 0) >= 5);
+  }
+
   function init() {
     const params = new URLSearchParams(window.location.search);
     sessionId = params.get('session');
@@ -24,7 +31,7 @@ const PlayerApp = (() => {
       playerName = localStorage.getItem('mylife_player_name') || '';
       playerTeam = savedTeam;
       db.ref(`sessions/${sessionId}`).once('value').then(snap => {
-        if (snap.val()?.gameVersion === 'integrated-v3') {
+        if (snap.val()?.gameVersion === 'integrated-v3' && !canUseInvestmentModule(snap.val())) {
           window.location.href = `/player-v3/?session=${encodeURIComponent(sessionId)}`;
           return;
         }
@@ -143,7 +150,7 @@ const PlayerApp = (() => {
         localStorage.setItem('mylife_player_team', playerTeam);
         localStorage.setItem('mylife_session_id', sessionId);
         const sessionConfig = snap.val() || {};
-        if (sessionConfig.gameVersion === 'integrated-v3') {
+        if (sessionConfig.gameVersion === 'integrated-v3' && !canUseInvestmentModule(sessionConfig)) {
           window.location.href = `/player-v3/?session=${encodeURIComponent(sessionId)}`;
           return;
         }
@@ -153,13 +160,27 @@ const PlayerApp = (() => {
   }
 
   // ===== SESSION =====
+  let integratedMode = false;
+  let moduleEntryTurn = null;
   let prevTurn = null;
   let prevPhase = null;
   function enterSession() {
+    IntegratedAssets.watch(sessionId);
     db.ref(`sessions/${sessionId}/state`).on('value', snap => {
       const state = snap.val() || {};
       const newTurn = state.currentTurn || 1;
       const newPhase = state.phase || 'investing';
+      if (integratedMode && prevPhase === 'settling' && newPhase === 'investing') {
+        location.replace('/player-v3/?session=' + encodeURIComponent(sessionId));
+        return;
+      }
+      if (new URLSearchParams(location.search).get('module') === 'investment') {
+        if (moduleEntryTurn === null) moduleEntryTurn = newTurn;
+        if (newTurn !== moduleEntryTurn || newPhase === 'quarterClosing') {
+          location.replace('/player-v3/?session=' + encodeURIComponent(sessionId));
+          return;
+        }
+      }
       maxTurns = state.maxTurns || 20;
       currentPhase = newPhase;
       quarterClosingPeriod = newPhase === 'quarterClosing' ? (state.quarterClosingPeriod || Math.floor(newTurn / 4)) : null;
@@ -273,9 +294,10 @@ const PlayerApp = (() => {
 
           <!-- Content -->
           <main class="p-4 pb-20 space-y-4">
-            ${renderBucketStatus(bucketTotals, bucketRecordCount, bucketRecords)}
+            ${new URLSearchParams(location.search).get('module') === 'investment' ? `<a class="block text-brand-blue font-bold" href="/player-v3/?session=${encodeURIComponent(sessionId)}">← 개인판으로 돌아가기</a>` : ''}
+            ${integratedMode ? '<div id="integratedAssets">자산 불러오는 중…</div>' : renderBucketStatus(bucketTotals, bucketRecordCount, bucketRecords)}
             ${phase === 'quarterClosing' ? renderQuarterClosing(quarterClosingPeriod, bucketRecords) : ''}
-            ${gameEnded ? renderGameEndedMessage(finalCash, bucketRecords) : ''}
+            ${gameEnded && !integratedMode ? renderGameEndedMessage(finalCash, bucketRecords) : ''}
             ${settled.length > 0 || adjustments.length > 0 ? renderHeroSummary(investments.length, totalProfit, totalLoss + eventAdjustmentTotal, netResult) : ''}
             ${!gameEnded && myMatured.length > 0 ? renderDiceSection(myMatured, isFinalSettling) : ''}
             ${!gameEnded && phase === 'investing' ? renderTodoBanner() : ''}
@@ -289,6 +311,10 @@ const PlayerApp = (() => {
 
       if (!gameEnded && phase === 'investing') bindInvestForm();
       if (!gameEnded && myMatured.length > 0) bindDice(myMatured);
+      if(integratedMode) db.ref(`sessions/${sessionId}`).once('value').then(snap=>{
+        const session=snap.val(),p=session.integrated?.[playerId]||{},t=IntegratedAssets.totals(session,playerId);
+        const target=document.getElementById('integratedAssets');if(target)target.textContent='현금 '+(p.cash||0)+'만 · 투자 중 '+t.principal+'만 · 정산 손익 '+t.profit+'만 · 만족도 '+(p.score||0)+'점';
+      });
       if (settled.length > 0) bindShareResult();
       document.getElementById('editPlayerNameBtn')?.addEventListener('click', changePlayerName);
       if (phase === 'investing') bindInvestmentEdits(active);
@@ -302,7 +328,7 @@ const PlayerApp = (() => {
         });
         if (!bucketRecords[String(closePeriod)]) openBucketRecordModal(bucketRecords, [closePeriod]);
       }
-      if (gameEnded) {
+      if (gameEnded && !integratedMode) {
         const finalPeriod = Math.floor(maxTurns / 4);
         const needsFinalRecord = !finalCash || finalCash.discardedTimeCount === undefined || !bucketRecords[String(finalPeriod)];
         document.getElementById('openFinalRecordBtn')?.addEventListener('click', () => {
@@ -311,7 +337,7 @@ const PlayerApp = (() => {
         if (needsFinalRecord) openFinalRecordModal(bucketRecords, finalCash, finalPeriod);
       }
 
-      if (!gameEnded && phase === 'investing' && !preInvestSnap.exists()) {
+      if (!integratedMode && !gameEnded && phase === 'investing' && !preInvestSnap.exists()) {
         showPreInvestmentNotice();
       }
     });
@@ -606,7 +632,7 @@ const PlayerApp = (() => {
           maturityTurn: currentTurn + MATURITY_TURNS, status: 'active', result: 'pending',
           profitAmount: 0, lossAmount: 0, preserveAmount: 0, createdAt: Date.now(),
         };
-        db.ref(`sessions/${sessionId}/investments`).push(investment).then(() => showToast('투자 완료!'));
+        (integratedMode ? IntegratedAssets.invest(sessionId,investment) : db.ref(`sessions/${sessionId}/investments`).push(investment)).then(() => showToast('투자 완료!')).catch(e=>showToast(e.message));
       });
     }
 
