@@ -6,6 +6,7 @@ const MasterApp = (() => {
   let sessionId = null;
   let sessionData = null;
   let currentTab = 'dashboard';
+  let lastWorldPrompt = '';
   let authRole = null;   // 'master' | 'trainer'
   let authName = null;   // 트레이너 이름 (master는 null)
   let authId = null;     // ownerId (트레이너 식별용)
@@ -385,6 +386,7 @@ const MasterApp = (() => {
   // ===== ADMIN LAYOUT =====
   function renderAdmin() {
     const state = sessionData.state || { currentTurn: 1, phase: 'investing' };
+    if(WorldBroadcast.pending(sessionData)&&lastWorldPrompt!==sessionId+':'+state.currentTurn){lastWorldPrompt=sessionId+':'+state.currentTurn;currentTab='worldevent';}
     const players = sessionData.players || {};
     const investments = sessionData.investments || {};
     const teams = sessionData.teams || {};
@@ -1629,6 +1631,7 @@ const MasterApp = (() => {
   }
 
   function nextTurn() {
+    if(WorldBroadcast.pending(sessionData)){showToast('이번 턴 월드 이벤트를 공개하고 효과 적용을 마쳐 주세요.');return;}
     const state = sessionData.state || {};
     const currentTurn = state.currentTurn || 1;
     const maxTurns = state.maxTurns || 20;
@@ -1668,6 +1671,7 @@ const MasterApp = (() => {
   }
 
   function endGame() {
+    if(WorldBroadcast.pending(sessionData)){showToast('마지막 월드 이벤트 적용을 먼저 마쳐 주세요.');return;}
     if (!confirm('게임을 종료하시겠습니까?\n미만기 투자는 주사위를 굴려 경과 기간 비율로 정산됩니다.')) return;
 
     // 미만기 투자를 정산 대기 상태로 전환하고, 정산 phase로 변경

@@ -49,6 +49,7 @@ const IntegratedAssets = (() => {
     await ref.once('value');
     const result=await ref.transaction(s=>{
       if(!s||s.gameVersion!=='integrated-v3'||s.state.phase!=='investing'||s.state.currentTurn!==investment.turn)return;
+      if(typeof WorldBroadcast!=='undefined'&&WorldBroadcast.pending(s))return;
       reconcile(s);const p=s.integrated?.[investment.playerId];if(!p||p.cash<investment.amount)return;
       s.investments=s.investments||{};s.investments[key]=investment;reconcile(s);return s;
     });
