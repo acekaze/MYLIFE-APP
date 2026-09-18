@@ -1,13 +1,14 @@
 const SalaryRoulette = (() => {
   const sound=new Audio('/assets/audio/game-show-wheel-spin.mp3');
   sound.preload='auto';sound.volume=0.55;
-  let muted=false;
+  let muted=false,spinGeneration=0;
   function unlock(){
     // Prime playback in the click gesture before the database round trip.
     if(muted)return;
+    const generation=spinGeneration;
     sound.muted=true;
     const attempt=sound.play();
-    if(attempt)attempt.then(()=>{sound.pause();sound.currentTime=0;sound.muted=false;}).catch(()=>{sound.muted=false;});
+    if(attempt)attempt.then(()=>{if(generation===spinGeneration){sound.pause();sound.currentTime=0;}sound.muted=false;}).catch(()=>{sound.muted=false;});
   }
   function randomFace(){const values=new Uint32Array(1);do{crypto.getRandomValues(values);}while(values[0]>=4294967292);return values[0]%6+1;}
   function mount(host){
@@ -19,6 +20,7 @@ const SalaryRoulette = (() => {
     toggle.onclick=()=>{muted=!muted;toggle.textContent=muted?'소리 꺼짐':'소리 켜짐';if(muted)sound.pause();};
   }
   function spin(host,face){
+    spinGeneration++;
     const wheel=host.querySelector('[data-wheel]'),pointer=host.querySelector('[data-pointer]'),status=host.querySelector('[data-status]');
     if(!wheel)return Promise.resolve();
     // Stop four degrees inside the winning sector; final settle never changes the result.
