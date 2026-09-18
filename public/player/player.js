@@ -25,7 +25,7 @@ const PlayerApp = (() => {
       playerTeam = savedTeam;
       db.ref(`sessions/${sessionId}`).once('value').then(snap => {
         if (snap.val()?.gameVersion === 'integrated-v3') {
-          window.location.href = `/preview/digital-quarter-flow-v2.html?v=participant-dice&session=${encodeURIComponent(sessionId)}`;
+          window.location.href = `/player-v3/?session=${encodeURIComponent(sessionId)}`;
           return;
         }
         enterSession();
@@ -144,7 +144,7 @@ const PlayerApp = (() => {
         localStorage.setItem('mylife_session_id', sessionId);
         const sessionConfig = snap.val() || {};
         if (sessionConfig.gameVersion === 'integrated-v3') {
-          window.location.href = `/preview/digital-quarter-flow-v2.html?v=participant-dice&session=${encodeURIComponent(sessionId)}`;
+          window.location.href = `/player-v3/?session=${encodeURIComponent(sessionId)}`;
           return;
         }
         enterSession();
