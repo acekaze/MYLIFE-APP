@@ -50,16 +50,20 @@ const BucketUI = (() => {
     const node=document.createElement('div');node.id=id;node.setAttribute('role','dialog');node.setAttribute('aria-modal','true');node.setAttribute('aria-label','버킷 카드');
     node.style.cssText='position:fixed;inset:0;z-index:1100;background:#102238f5;color:white;overflow:auto;padding:20px;box-sizing:border-box';document.body.append(node);return node;
   }
-  function detail(card,choices) {
+  function balance(resources){return resources?'<div style="position:sticky;top:0;z-index:2;background:#18364e;color:white;border:1px solid #7191aa;border-radius:14px;padding:16px;margin-bottom:16px;font-size:19px" aria-live="polite">보유 현금 <strong>'+Number(resources.cash).toLocaleString('ko-KR')+'만 원</strong>　◷ 시간 <strong>'+resources.time+'개</strong></div>':'';}
+  function detail(card,choices,resources) {
     const node=overlay('bucketDetail');node.style.zIndex=1200;
     node.innerHTML='<section style="max-width:540px;margin:4vh auto;background:white;color:#17243d;border-radius:22px;padding:24px">'+cardMarkup(card)+'<div id="bucketChoices"></div><button id="closeBucketDetail">'+(choices?'선택 취소 · 카드 목록':'닫기')+'</button></section>';
     node.querySelector('#closeBucketDetail').onclick=()=>node.remove();
+    node.querySelector('section').insertAdjacentHTML('afterbegin',balance(resources));
+    if(resources&&choices)node.querySelector('#bucketChoices').insertAdjacentHTML('beforebegin','<p>이루기 비용: '+card[1]+'만 원 · 시간 '+card[2]+'개</p>'+(resources.cash>=card[1]&&resources.time>=card[2]?'<p>이룬 후: '+(resources.cash-card[1]).toLocaleString('ko-KR')+'만 원 · 시간 '+(resources.time-card[2])+'개</p>':'<p style="color:#b42318">현금 또는 시간이 부족합니다.</p>'));
     if(choices)for(const [label,disabled,callback] of choices){const b=document.createElement('button');b.textContent=label;b.disabled=disabled;b.style.margin='8px';b.onclick=()=>{node.remove();callback();};node.querySelector('#bucketChoices').append(b);}
   }
-  function choose(cards,used,busy,act,finish) {
+  function choose(cards,used,busy,act,finish,resources) {
     const node=overlay('bucketChooser');
     node.innerHTML='<section style="max-width:980px;margin:auto"><h2>이번 턴의 버킷 선택</h2><p>이루기 '+(used.done?1:0)+'/1 · 버리기 '+(used.discard?1:0)+'/1</p><p>카드를 눌러 크게 확인하세요. 아무것도 선택하지 않아도 됩니다.</p><div id="bucketPhotoGrid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:16px"></div><button id="finishBucket" style="margin:24px 0;width:100%">선택 완료 · 투자 단계로</button></section>';
-    cards.forEach((card,i)=>{const b=document.createElement('button');b.innerHTML=cardMarkup(card);b.style.textAlign='left';b.onclick=()=>detail(card,[['이루기 확정',busy||!!used.done,()=>act('done',i)],['버리기 확정',busy||!!used.discard,()=>act('discard',i)]]);node.querySelector('#bucketPhotoGrid').append(b);});
+    node.querySelector('section').insertAdjacentHTML('afterbegin',balance(resources));
+    cards.forEach((card,i)=>{const short=resources&&(resources.cash<card[1]||resources.time<card[2]);const b=document.createElement('button');b.innerHTML=cardMarkup(card)+(short?'<p style="color:#b42318">현금·시간 부족</p>':'');b.style.textAlign='left';b.onclick=()=>detail(card,[[short?'자원 부족':used.done?'이번 턴 이루기 완료':'이루기 확정',busy||!!used.done||short,()=>act('done',i)],['버리기 확정',busy||!!used.discard,()=>act('discard',i)]],resources);node.querySelector('#bucketPhotoGrid').append(b);});
     node.querySelector('#finishBucket').onclick=()=>{node.remove();finish();};
   }
   return {gallery,choose,photo,album,review,groupAchievements};

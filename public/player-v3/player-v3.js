@@ -76,7 +76,7 @@ if(!completed)showAbility();
 }else if(step===4){
 const used=actions();
 c.innerHTML='<h2>버킷 이루기·버리기</h2><p>사진을 눌러 카드를 선택하세요.</p>';
-BucketUI.choose(hand,used,busy,bucketAction,()=>onceAction('bucketReviewed',d=>d,5));
+BucketUI.choose(hand,used,busy,bucketAction,()=>onceAction('bucketReviewed',d=>d,5),{cash,time});
 
 }else{
 c.innerHTML='<h2>상품 투자</h2><p>기존 투자 화면에서 상품과 금액을 선택하고 접수합니다.</p><button class="primary" id="openInvestment">투자 화면으로 이동</button>';
