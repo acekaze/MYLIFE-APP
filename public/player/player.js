@@ -33,7 +33,7 @@ const PlayerApp = (() => {
       playerTeam = savedTeam;
       db.ref(`sessions/${sessionId}`).once('value').then(snap => {
         if (snap.val()?.gameVersion === 'integrated-v3' && !canUseInvestmentModule(snap.val())) {
-          window.location.href = `/player-v3/?session=${encodeURIComponent(sessionId)}`;
+          SettlementFlow.returnToBoard(sessionId);
           return;
         }
         enterSession();
@@ -152,7 +152,7 @@ const PlayerApp = (() => {
         localStorage.setItem('mylife_session_id', sessionId);
         const sessionConfig = snap.val() || {};
         if (sessionConfig.gameVersion === 'integrated-v3' && !canUseInvestmentModule(sessionConfig)) {
-          window.location.href = `/player-v3/?session=${encodeURIComponent(sessionId)}`;
+          SettlementFlow.returnToBoard(sessionId);
           return;
         }
         enterSession();
@@ -166,6 +166,11 @@ const PlayerApp = (() => {
   let prevTurn = null;
   let prevPhase = null;
   function enterSession() {
+    if(integratedMode&&new URLSearchParams(location.search).get('embed')==='1'){
+      const style=document.createElement('style');
+      style.textContent='body{background:#f3f5f3!important}#app>div>header{display:none!important}a[href^="/player-v3/"]{display:none!important}#app main{padding:12px!important}';
+      document.head.append(style);
+    }
     IntegratedAssets.watch(sessionId);
     if(integratedMode)SettlementFlow.watch(sessionId,playerId,false);
     db.ref(`sessions/${sessionId}/state`).on('value', snap => {
@@ -175,7 +180,7 @@ const PlayerApp = (() => {
       if (new URLSearchParams(location.search).get('module') === 'investment') {
         if (moduleEntryTurn === null) moduleEntryTurn = newTurn;
         if (newTurn !== moduleEntryTurn || newPhase === 'quarterClosing') {
-          location.replace('/player-v3/?session=' + encodeURIComponent(sessionId));
+          SettlementFlow.returnToBoard(sessionId);
           return;
         }
       }
