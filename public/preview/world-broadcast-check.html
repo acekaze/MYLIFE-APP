@@ -1,0 +1,10 @@
+<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>월드 이벤트 공지·효과 확인</title><style>body{font-family:sans-serif;background:#edf2ef;color:#173342;max-width:720px;margin:30px auto;padding:20px}button,select{padding:15px;margin:8px;border:1px solid #b9cac2;border-radius:12px;background:white}button{cursor:pointer}</style><h1>월드 이벤트 전체 공지</h1><p>관리자 공개 → 참가자 공지 확인 → 커스텀 적용 결과 확인을 시험합니다. 게임 데이터는 변경하지 않습니다.</p><select id="card"></select><button id="publish">전체 공지 띄우기</button><button id="apply">예시: 내 투자금 200만 차감 결과</button><script src="/js/world-event-catalog.js"></script><script>
+const session={gameVersion:'integrated-v3',integrated:{demo:{}},worldBroadcasts:{}};let listener;
+window.firebase={database:()=>({ref:()=>({on:(_,fn)=>{listener=fn;notify();},child:()=>({set:async revision=>{session.integrated.demo.worldNoticeSeen={example:revision};notify();}})})})};
+function notify(){if(listener)listener({val:()=>session});}
+</script><script src="/js/world-broadcast.js"></script><script>
+for(const c of WORLD_EVENT_CATALOG){const option=document.createElement('option');option.value=c.id;option.textContent=c.title;document.getElementById('card').append(option);}document.getElementById('card').value='world-06';
+document.getElementById('publish').onclick=()=>{const card=WORLD_EVENT_CATALOG.find(c=>c.id===document.getElementById('card').value);session.integrated.demo.worldNoticeSeen={};session.worldBroadcasts.example={id:'example',title:card.title,effectText:card.effect,image:card.image,turn:4,status:'announced',revision:1,createdAt:Date.now(),recipients:{demo:true}};notify();};
+document.getElementById('apply').onclick=()=>{const e=session.worldBroadcasts.example;if(!e){alert('먼저 공지를 열어 주세요.');return;}e.status='applied';e.revision=2;e.effectsByPlayer={demo:{message:'투자 1건에서 200만 원 차감\n남은 투자금으로 투자 유지'}};notify();};
+WorldBroadcast.watch('DEMO','demo');
+</script></html>

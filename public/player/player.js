@@ -172,6 +172,7 @@ const PlayerApp = (() => {
       document.head.append(style);
     }
     IntegratedAssets.watch(sessionId);
+    if(integratedMode)WorldBroadcast.watch(sessionId,playerId);
     if(integratedMode)SettlementFlow.watch(sessionId,playerId,false);
     db.ref(`sessions/${sessionId}/state`).on('value', snap => {
       const state = snap.val() || {};

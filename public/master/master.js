@@ -960,6 +960,8 @@ const MasterApp = (() => {
   }
 
   function bindWorldEventEvents(investments) {
+    WorldBroadcast.mountAdmin(sessionId,sessionData,document.getElementById('tabContent'));
+    if(!document.getElementById('worldEventConfirmBtn'))return;
     const pending = investments.filter(i => i.result === 'pending');
     const byProduct = {};
     pending.forEach(inv => {
@@ -1073,7 +1075,7 @@ const MasterApp = (() => {
       list.innerHTML = lines.join('');
     }
 
-    document.getElementById('worldEventConfirmBtn')?.addEventListener('click', () => {
+    document.getElementById('worldEventConfirmBtn')?.addEventListener('click', async () => {
       const pids = getSelectedIds();
       if (pids.length === 0 || (effectType === 'diceSettlement' && !finalDice)) return;
       const fixedLossAmount = Number(document.getElementById('worldEventLossAmount')?.value || 0);
@@ -1086,6 +1088,12 @@ const MasterApp = (() => {
       const updates = {};
       const eventKey = db.ref(`sessions/${sessionId}/worldEvents`).push().key;
       const targets = pids.flatMap(pid => byProduct[pid] || []);
+      if(sessionData.gameVersion==='integrated-v3'){
+        const button=document.getElementById('worldEventConfirmBtn');button.disabled=true;
+        let latest;
+        try{latest=(await db.ref(`sessions/${sessionId}`).once('value')).val();}catch(e){button.disabled=false;showToast('세션을 다시 읽지 못했습니다. 다시 시도해 주세요.');return;}
+        if(latest?.state?.currentTurn!==state.currentTurn||latest?.state?.phase!==state.phase||targets.some(inv=>latest.investments?.[inv.id]?.result!=='pending'||Number(latest.investments?.[inv.id]?.amount)!==Number(inv.amount))){showToast('투자 또는 턴 상태가 바뀌었습니다. 다시 선택해 주세요.');return;}
+      }
       const productNames = pids.map(pid => getProductById(pid)?.name || pid);
       const now = Date.now();
       let eventData = { turn: state.currentTurn, effectType, productNames, targetCount: targets.length, createdAt: now };
@@ -1130,6 +1138,7 @@ const MasterApp = (() => {
         eventData = { ...eventData, affectedCount: 0 };
       }
       updates[`sessions/${sessionId}/worldEvents/${eventKey}`] = eventData;
+      WorldBroadcast.attach(updates,sessionId,sessionData,eventKey,eventData,targets);
 
       const confirm = document.getElementById('worldEventConfirmBtn');
       confirm.disabled = true;
