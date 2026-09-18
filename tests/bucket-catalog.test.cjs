@@ -1,0 +1,22 @@
+const fs=require('node:fs');
+const vm=require('node:vm');
+const assert=require('node:assert/strict');
+const context={};vm.createContext(context);
+vm.runInContext(fs.readFileSync('public/js/bucket-catalog.js','utf8')+';this.cards=BUCKET_CATALOG;',context);
+vm.runInContext(fs.readFileSync('public/js/bucket-deck.js','utf8')+';this.deck=BucketDeck;',context);
+const {cards,deck}=context;
+assert.equal(cards.length,200);assert.equal(new Set(cards.map(c=>c.id)).size,200);
+for(const c of cards){assert(c.title.trim());for(const key of ['cash','time','score'])assert(Number.isInteger(c[key])&&c[key]>=0);assert(c.source&&c.page>0);}
+const order=deck.shuffle(cards);assert.equal(new Set(order).size,200);
+let data=deck.fill({},1,cards,order);assert.equal(data.hand.length,5);
+const originalIds=data.hand.map(c=>c[5]);assert.equal(new Set(originalIds).size,5);
+data.turnActions={1:{fill:true,done:true,discard:true}};
+data.achieved=[data.hand.shift()];data.hand.shift();
+assert.equal(deck.fill(data,1,cards,order),null);
+const next=deck.fill(data,2,cards,order);assert.equal(next.hand.length,5);
+assert.equal(next.drawnBucketIds.length,7);assert.equal(next.hand.filter(c=>c[4]===2).length,2);
+assert(!next.hand.slice(-2).some(c=>originalIds.includes(c[5])));
+next.turnActions[2]={fill:true};assert.equal(deck.fill(next,2,cards,order),null);
+const restored=JSON.parse(JSON.stringify(next));assert.equal(deck.fill(restored,2,cards,order),null);
+const full=deck.fill({...restored,turnActions:{}},3,cards,order);assert.equal(full.drawnBucketIds.length,7);
+console.log('PASS: 200 cards, valid fields, five-card deal, next-turn-only refill, unique draws, reload persistence, no extra draw with full hand');
