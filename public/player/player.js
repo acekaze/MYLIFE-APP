@@ -23,7 +23,13 @@ const PlayerApp = (() => {
       playerId = savedPlayer;
       playerName = localStorage.getItem('mylife_player_name') || '';
       playerTeam = savedTeam;
-      enterSession();
+      db.ref(`sessions/${sessionId}`).once('value').then(snap => {
+        if (snap.val()?.gameVersion === 'integrated-v3') {
+          window.location.href = `/preview/digital-quarter-flow-v2.html?v=participant-dice&session=${encodeURIComponent(sessionId)}`;
+          return;
+        }
+        enterSession();
+      });
     } else {
       renderLogin();
     }
@@ -136,6 +142,11 @@ const PlayerApp = (() => {
         localStorage.setItem('mylife_player_name', playerName);
         localStorage.setItem('mylife_player_team', playerTeam);
         localStorage.setItem('mylife_session_id', sessionId);
+        const sessionConfig = snap.val() || {};
+        if (sessionConfig.gameVersion === 'integrated-v3') {
+          window.location.href = `/preview/digital-quarter-flow-v2.html?v=participant-dice&session=${encodeURIComponent(sessionId)}`;
+          return;
+        }
         enterSession();
       });
     }).catch(() => showToast('연결 실패'));
