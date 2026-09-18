@@ -162,6 +162,7 @@ const MasterApp = (() => {
               <h2 class="font-bold text-[16px] mb-3">새 세션 만들기</h2>
               <div class="flex flex-col gap-3">
                 <input type="text" id="newSessionName" class="h-[48px] rounded-xl border border-brand-border px-4 text-[16px] focus:border-brand-blue outline-none" placeholder="세션 이름 (예: 3월 워크숍)">
+                <label class="text-[13px] text-brand-gray-text">게임 버전<select id="newSessionVersion" class="w-full h-[48px] mt-1 rounded-xl border border-brand-border px-4 text-[15px] bg-white"><option value="legacy">기존 계산 앱</option><option value="integrated-v3">신규 통합 버전 (테스트)</option></select></label>
                 <button id="createSessionBtn" class="w-full h-[48px] bg-brand-blue text-white rounded-xl font-bold active:scale-[0.98] transition-transform">세션 생성</button>
               </div>
             </div>
@@ -183,6 +184,7 @@ const MasterApp = (() => {
                           <div class="font-bold text-[15px]">${s.name || '(이름 없음)'}</div>
                           <div class="text-brand-gray-text text-[12px] mt-0.5">
                             코드 ${s.id} · ${s.players ? Object.keys(s.players).length : 0}명 · 턴 ${s.state?.currentTurn || 1}
+                            · <span class="font-semibold ${s.gameVersion === 'integrated-v3' ? 'text-brand-blue' : 'text-brand-gray-text'}">${s.gameVersion === 'integrated-v3' ? '신규 통합' : '기존 계산'}</span>
                             ${s.state?.gameEnded ? ' · 🏁종료' : ''}
                           </div>
                         </div>
@@ -344,12 +346,13 @@ const MasterApp = (() => {
 
   function createSession() {
     const name = document.getElementById('newSessionName').value.trim();
+    const gameVersion = document.getElementById('newSessionVersion')?.value || 'legacy';
     if (!name) { showToast('세션 이름을 입력해 주세요'); return; }
     const code = generateCode();
     sessionId = code;
     db.ref(`sessions/${code}`).set({
       name, code, createdAt: Date.now(),
-      ownerId: authId, ownerName: authName || '총관리자',
+      ownerId: authId, ownerName: authName || '총관리자', gameVersion,
       state: { currentTurn: 1, phase: 'investing', maxTurns: 20, gameEnded: false },
     }).then(() => {
       localStorage.setItem('mylife_master_session', sessionId);
@@ -404,7 +407,8 @@ const MasterApp = (() => {
     document.getElementById('app').innerHTML = `
       <!-- Header -->
       <header class="bg-header-bg h-[64px] flex items-center justify-between px-6 shrink-0 shadow-sm z-50">
-        <span class="font-bold text-[18px] text-white">${sessionData.name || 'My Life'}</span>
+                <span class="font-bold text-[18px] text-white">${sessionData.name || 'My Life'}</span>
+                <span class="ml-2 text-[11px] px-2 py-1 rounded-full bg-white/15 text-white/90">${sessionData.gameVersion === 'integrated-v3' ? '신규 통합 테스트' : '기존 계산 앱'}</span>
         <div class="flex items-center gap-4">
           <span class="text-white/80 font-mono text-sm">코드: ${sessionId}</span>
           <span class="text-brand-gray-text text-sm">${teamCount}팀 ${playerCount}명</span>
