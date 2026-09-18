@@ -20,12 +20,14 @@ const BucketUI = (() => {
   }
   function summary(cards){return cards.length+'개 · '+new Set(cards.map(c=>c[0])).size+'종 · 만족도 '+cards.reduce((n,c)=>n+(Number(c[3])||0),0)+'점';}
   function periodLabel(period){return period?'Q'+((period-1)*4+1)+'–Q'+period*4:'이전 기록 · 달성 턴 미기록';}
-  function review(cards,period){
+  function review(cards,period,onComplete){
     const node=overlay('bucketReview');
     node.innerHTML='<section style="max-width:1000px;margin:auto"><h2>'+periodLabel(period)+' 버킷 나누기</h2><p>'+summary(cards)+'</p><p>카드를 크게 열어 서로 보여주며 이야기하세요.</p><div id="reviewCards"></div><button id="closeReview" style="width:100%;margin-top:20px">공유 화면 닫기</button></section>';
     gallery(node.querySelector('#reviewCards'),cards,'이 기간에 이룬 버킷');
     if(!cards.length)node.querySelector('#reviewCards').innerHTML='<p>이 기간에 이룬 버킷이 없습니다.</p>';
-    node.querySelector('#closeReview').onclick=()=>node.remove();
+    const close=node.querySelector('#closeReview');
+    if(onComplete)close.textContent='공유 완료 · 연봉협상으로';
+    close.onclick=async()=>{if(!onComplete){node.remove();return;}close.disabled=true;try{await onComplete();node.remove();}catch(e){close.disabled=false;close.textContent='저장 실패 · 다시 시도';}};
   }
   function album(target,cards,turn,isClosing){
     const groups=groupAchievements(cards,turn);

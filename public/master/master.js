@@ -1619,7 +1619,7 @@ const MasterApp = (() => {
       });
       return;
     }
-    if(sessionData.gameVersion==='integrated-v3'&&state.phase==='quarterClosing'&&Object.keys(sessionData.players||{}).some(id=>sessionData.integrated?.[id]?.negotiations?.[currentTurn]?.status!=='settled')){showToast('참가자의 연봉협상이 끝난 뒤 진행해 주세요');return;}
+    if(sessionData.gameVersion==='integrated-v3'&&state.phase==='quarterClosing'&&Object.keys(sessionData.players||{}).some(id=>!sessionData.integrated?.[id]?.negotiations?.[currentTurn]?.acknowledged)){showToast('참가자의 연봉협상이 끝난 뒤 진행해 주세요');return;}
     const newTurn = (state.currentTurn || 1) + 1;
     const investments = sessionData.investments || {};
     const investArr = Object.entries(investments).map(([id, inv]) => ({ id, ...inv }));
