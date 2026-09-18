@@ -1,0 +1,23 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+let session={gameVersion:'integrated-v3',state:{currentTurn:4,phase:'quarterClosing'},players:{a:{name:'A',teamId:'red',joinedAt:1},b:{name:'B',teamId:'red',joinedAt:2},c:{name:'C',teamId:'blue',joinedAt:3}},integrated:{a:{abilityLevel:3,salaryLevel:6,quarterReviews:{4:true}},b:{abilityLevel:1,salaryLevel:6,quarterReviews:{4:true}},c:{abilityLevel:2,salaryLevel:6,quarterReviews:{4:true}}}};
+const ref={once:async()=>({val:()=>session}),transaction:async f=>{const candidate=f(structuredClone(session));if(candidate)session=candidate;return {committed:!!candidate,snapshot:{val:()=>session}}}};
+const c={firebase:{database:()=>({ref:()=>ref})}};vm.createContext(c);vm.runInContext(fs.readFileSync('public/js/team-play.js','utf8')+';this.team=TeamPlay;',c);
+(async()=>{
+ assert.equal(c.team.salary(session,'b').active[0],'a');
+ await assert.rejects(c.team.roll('test','b',6));
+ await c.team.roll('test','a',5);assert.equal(session.integrated.a.negotiations[4].after,9);
+ await assert.rejects(c.team.roll('test','a',1));
+ assert.equal(c.team.salary(session,'b').active[0],'a');
+ await c.team.advance('test','a');assert.equal(c.team.salary(session,'a').active[0],'b');
+ assert.equal(c.team.salary(session,'c').active[0],'c');
+ await c.team.skip('test','b','salarySkipped');assert.equal(c.team.salary(session,'a').active,undefined);
+ session.state={currentTurn:5,phase:'settling'};
+ session.investments={x:{playerId:'a',maturityTurn:5,result:'pending'},y:{playerId:'c',maturityTurn:5,result:'pending'}};
+ assert.equal(c.team.settlement(session,'b').ready,false);assert.equal(c.team.settlement(session,'b').list.length,2);
+ await assert.rejects(c.team.confirmSettlement('test','b'));
+ session.investments.x={playerId:'a',maturityTurn:5,result:'success',profitAmount:40,settledTurn:5,settledAt:10};
+ assert.equal(c.team.settlement(session,'b').ready,true);assert.equal(c.team.settlement(session,'c').ready,false);
+ await c.team.confirmSettlement('test','b');assert.equal(session.integrated.a.settlementSeen.x,10);assert.equal(c.team.settlement(session,'a').complete,true);assert.equal(c.team.settlement(session,'c').complete,false);
+ await assert.rejects(c.team.confirmSettlement('test','a'));
+ console.log('PASS: turn ownership, duplicate rolls, explicit handoff, team isolation, skips, no-maturity members, settlement barrier and confirmation');
+})();

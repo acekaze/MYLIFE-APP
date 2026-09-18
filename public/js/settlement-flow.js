@@ -11,19 +11,24 @@ const SettlementFlow = (() => {
     const db=firebase.database(),ref=db.ref('sessions/'+sid);let navigating=false;
     ref.on('value',snap=>{
       const s=snap.val();if(s?.gameVersion!=='integrated-v3')return;
-      const {pending,results}=inspect(s,pid);
-      if(board&&pending.length&&!navigating){navigating=true;location.replace('/player/?session='+encodeURIComponent(sid)+'&module=investment');return;}
+      const {pending}=inspect(s,pid),team=TeamPlay.settlement(s,pid),own=team.list.find(p=>p.id===pid);
+      if(board&&pending.length&&!own?.skipped&&!navigating){navigating=true;location.replace('/player/?session='+encodeURIComponent(sid)+'&module=investment');return;}
+      const wasShowing=!!document.getElementById('settlementSummary');
       document.getElementById('settlementSummary')?.remove();
-      if(pending.length||!results.length)return;
-      const overlay=document.createElement('div');overlay.id='settlementSummary';overlay.setAttribute('role','dialog');overlay.setAttribute('aria-modal','true');overlay.setAttribute('aria-label','투자 정산 결과');
+      if(team.complete&&wasShowing&&!board){location.replace('/player-v3/?session='+encodeURIComponent(sid));return;}
+      if((pending.length&&!own?.skipped)||!team.hasResults||team.complete)return;
+      const overlay=document.createElement('div');overlay.id='settlementSummary';overlay.setAttribute('role','dialog');overlay.setAttribute('aria-modal','true');overlay.setAttribute('aria-label','팀 투자 결과');
       overlay.style.cssText='position:fixed;inset:0;z-index:5000;background:#102238f5;color:white;overflow:auto;padding:24px;box-sizing:border-box';
-      const section=document.createElement('section');section.style.cssText='max-width:620px;margin:3vh auto';overlay.append(section);
-      const heading=document.createElement('h2');heading.textContent='Q'+s.state.currentTurn+' 투자 손익';section.append(heading);
-      let netTotal=0;
-      for(const [,inv] of results){const net=(Number(inv.profitAmount)||0)+(Number(inv.lossAmount)||0);netTotal+=net;const card=document.createElement('article');card.style.cssText='background:white;color:#17243d;padding:20px;border-radius:16px;margin:12px 0';const title=document.createElement('h3');title.textContent=inv.productName;card.append(title);const body=document.createElement('p');body.textContent=(net>=0?'+':'')+net.toLocaleString('ko-KR')+'만 원';card.append(body);section.append(card);}
-      const summary=document.createElement('p');summary.textContent='이번 쿼터 손익 합계 '+(netTotal>=0?'+':'')+netTotal.toLocaleString('ko-KR')+'만 원';section.append(summary);
-      const next=document.createElement('button');next.textContent='결과 확인 · 개인판으로';next.style.cssText='width:100%;padding:20px;border:0;border-radius:14px;font-size:18px';section.append(next);
-      next.onclick=async()=>{next.disabled=true;try{const updates={};for(const [id,i] of results)updates[id]=i.settledAt;await ref.child('integrated/'+pid+'/settlementSeen').update(updates);location.replace('/player-v3/?session='+encodeURIComponent(sid));}catch(e){next.disabled=false;next.textContent='저장 실패 · 다시 확인';}};
+      const section=document.createElement('section');section.style.cssText='max-width:650px;margin:3vh auto';overlay.append(section);
+      const heading=document.createElement('h2');heading.textContent='Q'+team.turn+' · 우리 팀 투자 결과';section.append(heading);
+      for(const member of team.list){
+        const row=document.createElement('details');row.style.cssText='background:white;color:#17243d;padding:18px;border-radius:16px;margin:12px 0';
+        const title=document.createElement('summary');title.textContent=member.name+' · '+(member.skipped?'진행자 건너뛰기':member.pending.length?'정산 중':member.results.length?(member.net>=0?'+':'')+member.net+'만 원':'만기 없음');row.append(title);
+        for(const [,inv] of member.results){const p=document.createElement('p');p.textContent=inv.productName+' · 원금 '+inv.amount+'만 · '+inv.result+' · 손익 '+((inv.profitAmount||0)+(inv.lossAmount||0))+'만';row.append(p);}section.append(row);
+      }
+      const hint=document.createElement('p');hint.textContent=team.ready?'팀 결과를 함께 이야기한 뒤 완료를 눌러 주세요.':'팀원의 정산 결과가 여기에 실시간으로 표시됩니다.';section.append(hint);
+      const next=document.createElement('button');next.textContent='함께 확인 완료 · 개인판으로';next.disabled=!team.ready;next.style.cssText='width:100%;padding:20px;border:0;border-radius:14px;font-size:18px';section.append(next);
+      next.onclick=async()=>{next.disabled=true;try{await TeamPlay.confirmSettlement(sid,pid);location.replace('/player-v3/?session='+encodeURIComponent(sid));}catch(e){hint.textContent=e.message;next.disabled=false;}};
       document.body.append(overlay);
     });
   }

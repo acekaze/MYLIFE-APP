@@ -17,22 +17,22 @@ const SalaryRoulette = (() => {
   function decorate(popup,result,period){
     if(!document.getElementById('salaryPresentationStyle')){
       const css=document.createElement('style');css.id='salaryPresentationStyle';css.textContent=`
-      #negotiationPopup{box-sizing:border-box;overflow:auto!important;padding:20px!important}
-      #negotiationPopup .salary-panel{position:relative;box-sizing:border-box;width:min(520px,100%)!important;max-height:calc(100dvh - 40px);overflow:auto;padding:52px 28px 22px!important;box-shadow:0 24px 80px #0003;text-align:center}
+      :is(#negotiationPopup,#teamSalaryPopup){box-sizing:border-box;overflow:auto!important;padding:20px!important}
+      :is(#negotiationPopup,#teamSalaryPopup) .salary-panel{position:relative;box-sizing:border-box;width:min(520px,100%)!important;max-height:calc(100dvh - 40px);overflow:auto;padding:52px 28px 22px!important;box-shadow:0 24px 80px #0003;text-align:center}
       .salary-tools{position:absolute;right:12px;top:10px;display:flex;align-items:center;gap:2px}
-      #negotiationPopup .salary-tools button,#negotiationPopup .salary-tools a{box-sizing:border-box;display:grid;place-items:center;min-width:44px;height:44px;padding:10px;border:0;border-radius:50%;background:transparent;color:#65758a;cursor:pointer}
-      #negotiationPopup .salary-tools a{font-size:11px;min-width:64px;text-decoration:none;border-radius:8px}
-      #negotiationPopup .salary-tools button:hover,#negotiationPopup .salary-tools a:hover{background:#edf2f8}
-      #negotiationPopup button:focus-visible,#negotiationPopup a:focus-visible{outline:3px solid #327cf0;outline-offset:2px}
+      :is(#negotiationPopup,#teamSalaryPopup) .salary-tools button,:is(#negotiationPopup,#teamSalaryPopup) .salary-tools a{box-sizing:border-box;display:grid;place-items:center;min-width:44px;height:44px;padding:10px;border:0;border-radius:50%;background:transparent;color:#65758a;cursor:pointer}
+      :is(#negotiationPopup,#teamSalaryPopup) .salary-tools a{font-size:11px;min-width:64px;text-decoration:none;border-radius:8px}
+      :is(#negotiationPopup,#teamSalaryPopup) .salary-tools button:hover,:is(#negotiationPopup,#teamSalaryPopup) .salary-tools a:hover{background:#edf2f8}
+      :is(#negotiationPopup,#teamSalaryPopup) button:focus-visible,:is(#negotiationPopup,#teamSalaryPopup) a:focus-visible{outline:3px solid #327cf0;outline-offset:2px}
       .salary-eyebrow{font-size:12px;letter-spacing:.1em;color:#69798d;margin:8px 0 24px}
       .salary-grade{display:inline-flex;align-items:center;gap:10px;padding:8px 16px;border-radius:30px;background:#ede9fb;color:#6246a3;font-size:13px;font-weight:700}
       .salary-grade b{font-size:22px}.salary-outcome{font-size:40px;letter-spacing:-1.5px;line-height:1.2;margin:18px 0 8px;color:#142e49}.salary-caption{font-size:14px;color:#69798d;margin:0 0 26px}
       .salary-equation{display:flex;justify-content:center;align-items:center;gap:18px;padding:18px;background:#f3f6fa;border-radius:16px;margin:22px 0}
       .salary-equation small{display:block;font-size:12px;color:#63758a;margin-bottom:8px}.salary-equation strong{font-size:28px;color:#253e57}.salary-equation .total{color:#6951bb}.salary-equation i{font-style:normal;color:#98a6b5}
       .salary-change{display:grid;grid-template-columns:1fr 24px 1fr;align-items:center;margin:24px 0;padding:4px 0}.salary-change small{display:block;font-size:12px;color:#69798d;margin-bottom:8px}.salary-change b{display:block;font-size:22px}.salary-change em{font-style:normal;font-size:13px;color:#63758a}.salary-change .salary-new{color:#2866ca}
-      #negotiationPopup #confirmNegotiation,#negotiationPopup #rollNegotiation{width:100%;border:0;border-radius:14px;background:#327cf0;color:white;padding:17px!important;font-size:16px!important;font-weight:700;cursor:pointer}
+      :is(#negotiationPopup,#teamSalaryPopup) #confirmNegotiation,:is(#negotiationPopup,#teamSalaryPopup) #rollNegotiation{width:100%;border:0;border-radius:14px;background:#327cf0;color:white;padding:17px!important;font-size:16px!important;font-weight:700;cursor:pointer}
       .salary-result{animation:salaryReveal .45s ease-out}@keyframes salaryReveal{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
-      @media(max-width:420px){#negotiationPopup .salary-panel{padding:52px 20px 20px!important}.salary-outcome{font-size:34px}.salary-equation{gap:14px}}
+      @media(max-width:420px){:is(#negotiationPopup,#teamSalaryPopup) .salary-panel{padding:52px 20px 20px!important}.salary-outcome{font-size:34px}.salary-equation{gap:14px}}
       @media(prefers-reduced-motion:reduce){.salary-result{animation:none}}`;document.head.append(css);
     }
     const panel=popup.querySelector('section');panel.classList.add('salary-panel');

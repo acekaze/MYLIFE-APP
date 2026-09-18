@@ -1,0 +1,11 @@
+<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>팀 연봉협상 동기화 테스트</title><style>body{font-family:Arial,sans-serif;background:#eef2f8;color:#17243d}button{border:0;border-radius:12px;padding:15px;background:#327cf0;color:white;font-weight:bold}iframe{width:48%;height:820px;border:1px solid #ccd5e3;border-radius:16px}p{line-height:1.5}</style><div id="demo"></div><script src="/js/salary-roulette.js"></script><script>
+const member=new URLSearchParams(location.search).get('member');
+if(!member){
+ window.demoData={gameVersion:'integrated-v3',state:{currentTurn:4,phase:'quarterClosing'},players:{a:{name:'지민',teamId:'red',joinedAt:1},b:{name:'수진',teamId:'red',joinedAt:2}},integrated:{a:{abilityLevel:3,salaryLevel:6,quarterReviews:{4:true}},b:{abilityLevel:2,salaryLevel:6,quarterReviews:{4:true}}}};
+ window.listeners=[];window.demoListen=f=>{listeners.push(f);f(structuredClone(demoData));};window.demoTransaction=f=>{const next=f(structuredClone(demoData));if(next){demoData=next;queueMicrotask(()=>listeners.forEach(fn=>fn(structuredClone(demoData))));}return {committed:!!next,snapshot:{val:()=>structuredClone(demoData)}};};
+ document.getElementById('demo').innerHTML='<h1>같은 팀 · 두 참가자 화면</h1><p>왼쪽 지민이 먼저 돌립니다. 오른쪽 수진도 회전과 결과를 함께 봅니다. 공유 완료 후 수진의 버튼이 활성화됩니다. 실제 Firebase에는 저장하지 않습니다.</p><iframe title="지민 화면" src="?member=a"></iframe><iframe title="수진 화면" src="?member=b"></iframe>';
+}else{
+ window.firebase={database:()=>({ref:()=>({once:async()=>({val:()=>structuredClone(parent.demoData)}),on:(_,f)=>parent.demoListen(d=>f({val:()=>d})),transaction:async f=>parent.demoTransaction(f)})})};
+ document.getElementById('demo').textContent=member==='a'?'지민 화면':'수진 화면';
+}
+</script><script src="/js/team-play.js"></script><script>if(member)TeamPlay.watchSalary('demo',member);</script></html>

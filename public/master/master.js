@@ -711,6 +711,17 @@ const MasterApp = (() => {
   }
 
   function bindDashboardEvents(state, playerArr, teamArr, investments) {
+    if(sessionData.gameVersion==='integrated-v3'){
+      const panel=document.createElement('section');panel.className='bg-white p-4 rounded-xl mb-4';
+      const title=document.createElement('h3');title.textContent='팀 공유 진행 관리';panel.append(title);
+      for(const player of playerArr){
+        const row=document.createElement('div');row.style.padding='8px';const name=document.createElement('span');name.textContent=player.name+' · ';row.append(name);
+        for(const [label,kind] of [['연봉협상 건너뛰기','salarySkipped'],['투자 정산 대기 제외','settlementSkipped']]){
+          const button=document.createElement('button');button.textContent=label;button.style.margin='4px';button.onclick=async()=>{if(!confirm(player.name+'님을 이번 순서에서 제외할까요? 투자 원금과 정산 기록은 유지됩니다.'))return;button.disabled=true;try{await TeamPlay.skip(sessionId,player.id,kind);}catch(e){showToast(e.message);button.disabled=false;}};row.append(button);
+        }panel.append(row);
+      }
+      const container=document.getElementById('dashboardContent')||document.getElementById('tabContent');if(container)container.prepend(panel);
+    }
     document.querySelectorAll('.proxy-skip').forEach(btn => {
       btn.addEventListener('click', () => {
         const { playerId, playerName, teamId } = btn.dataset;
@@ -1619,7 +1630,7 @@ const MasterApp = (() => {
       });
       return;
     }
-    if(sessionData.gameVersion==='integrated-v3'&&state.phase==='quarterClosing'&&Object.keys(sessionData.players||{}).some(id=>!sessionData.integrated?.[id]?.negotiations?.[currentTurn]?.acknowledged)){showToast('참가자의 연봉협상이 끝난 뒤 진행해 주세요');return;}
+    if(sessionData.gameVersion==='integrated-v3'&&state.phase==='quarterClosing'&&Object.keys(sessionData.players||{}).some(id=>!sessionData.integrated?.[id]?.negotiations?.[currentTurn]?.acknowledged&&!sessionData.teamRounds?.[currentTurn]?.[sessionData.players[id].teamId||id]?.salarySkipped?.[id])){showToast('참가자의 연봉협상이 끝난 뒤 진행해 주세요');return;}
     const newTurn = (state.currentTurn || 1) + 1;
     const investments = sessionData.investments || {};
     const investArr = Object.entries(investments).map(([id, inv]) => ({ id, ...inv }));
