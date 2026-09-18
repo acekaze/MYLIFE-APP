@@ -738,7 +738,7 @@ const PlayerApp = (() => {
     const updates = {
       diceValue: dice, result: savedResult,
       profitAmount: calc.profitAmount, lossAmount: calc.lossAmount, preserveAmount: calc.preserveAmount,
-      settledAt: Date.now(),
+      settledAt: Date.now(), settledTurn: currentTurn,
     };
     if (isFinalSettling) {
       updates.settledBy = 'gameEnd';

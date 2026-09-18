@@ -1263,7 +1263,7 @@ const MasterApp = (() => {
       const result = judgeResult(product, diceValue);
       const calc = calculateResult(inv.amount, product, result);
       db.ref(`sessions/${sessionId}/investments/${invId}`).update({
-        diceValue, result, profitAmount: calc.profitAmount, lossAmount: calc.lossAmount, preserveAmount: calc.preserveAmount, settledAt: Date.now(),
+        diceValue, result, profitAmount: calc.profitAmount, lossAmount: calc.lossAmount, preserveAmount: calc.preserveAmount, settledAt: Date.now(), settledTurn: sessionData.state.currentTurn,
       }).then(() => {
         showToast(`${inv.playerName}: ${resultLabel(result)} (주사위 ${diceValue})`);
         if (isFinalSettling) checkFinalSettleComplete();
@@ -1676,7 +1676,7 @@ const MasterApp = (() => {
       diceValue, result: result === 'success' ? 'earlyTerm' : result === 'fail' ? 'earlyTermFail' : 'preserve',
       profitAmount: calc.profitAmount, lossAmount: calc.lossAmount, preserveAmount: calc.preserveAmount,
       finalSettlementFactor: settlementFactor,
-      settledAt: Date.now(), settledBy: 'gameEnd',
+      settledAt: Date.now(), settledBy: 'gameEnd', settledTurn: sessionData.state.currentTurn,
     }).then(() => {
       const resultText = result === 'success' ? `중도해약 수익 +${formatAmount(calc.profitAmount)}` :
                          result === 'fail' ? `중도해약 손실 ${formatAmount(calc.lossAmount)}` : '원금보존';
