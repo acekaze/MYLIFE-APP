@@ -5,8 +5,9 @@ function raiseFor(total){return total<=2?0:total<=4?1:total<=6?2:3;}
 function hydrate(d){window.principal=d.investmentPrincipal||0;window.investmentProfit=d.investmentProfit||0;salaryLevel=d.salaryLevel||6;cash=d.cash??cash;time=d.time??time;score=d.score??score;hand=d.hand||[];achieved=d.achieved||[];turnActions=d.turnActions||{};window.abilityCount=d.abilityLevel||0;negotiations=d.negotiations||{};furthest=Math.max(furthest,d.progress?.[turn]||0);}
 async function onceAction(key,change,next){
  if(busy)return;busy=true;
- try{await root.once('value');const result=await root.transaction(d=>{
+ try{const liveState=(await state.once('value')).val();if((liveState?.currentTurn||1)!==turn||liveState?.phase!=='investing')throw new Error('턴 변경');await root.once('value');const result=await root.transaction(d=>{
  d=d||{cash,time,score,hand,achieved};
+ IntegratedAssets.resetTime(d,liveState);
  const a=d.turnActions?.[turn]||{};
  if(a[key])return;
  const changed=change(d,a);if(!changed)return;
@@ -33,7 +34,7 @@ function negotiationScreen(){
  if(!r)el('rollNegotiation').onclick=rollNegotiation;
 }
 function personalEventDue(n){return [2,6,10,14,18].includes(Number(n));}
-function render(){el('personalEventPopup')?.remove();if(!personalEventDue(turn)&&step===0)step=1;if(personalEventDue(turn)&&!actions().event&&sessionPhase==='investing')step=0;if(!el('boardNav')){const nav=document.createElement('nav');nav.id='boardNav';nav.innerHTML='<button id="tabBoard">개인판</button> <button id="tabInvest">투자</button> <button id="tabAchieved">이룬 버킷</button> <button id="tabAssets">자산 현황</button>';c.before(nav);el('tabBoard').onclick=()=>c.scrollIntoView();el('tabInvest').onclick=()=>{if(furthest>=5||sessionPhase==='settling'||sessionPhase==='finalSettling')location.href='/player/?session='+encodeURIComponent(sid)+'&module=investment';else alert('개인 행동을 완료한 뒤 투자할 수 있습니다.');};el('tabAchieved').onclick=()=>el('achievedFrame')?.scrollIntoView();el('tabAssets').onclick=()=>el('status').scrollIntoView();}if(!el('handFrame')){for(const id of ['handFrame','achievedFrame']){const section=document.createElement('section');section.id=id;section.className='card';c.after(section);}}if(sessionPhase==='settling'||sessionPhase==='finalSettling'){frame();c.innerHTML='<h2>투자 정산</h2><p>주사위 정산 후 이번 턴 개인판으로 이어집니다.</p><a href="/player/?session='+encodeURIComponent(sid)+'&module=investment">투자 정산 탭 열기</a>';return;}if(closingTurn){frame();negotiationScreen();return;}furthest=Math.max(furthest,step);for(let i=0;i<6;i++){const t=el('s'+i);t.classList.toggle('on',i===step);t.style.display=i===0&&!personalEventDue(turn)?'none':'';t.onclick=()=>{if(i<=furthest){step=i;render()}}}el('title').textContent=`Q${turn} · ${['개인 이벤트','임금 수령','버킷 채우기','업무능력 투자','버킷 처리','상품 투자'][step]}`;frame();if(step===0){
+function render(){el('salaryReceivePopup')?.remove();el('personalEventPopup')?.remove();if(!personalEventDue(turn)&&step===0)step=1;if(personalEventDue(turn)&&!actions().event&&sessionPhase==='investing')step=0;if(!el('boardNav')){const nav=document.createElement('nav');nav.id='boardNav';nav.innerHTML='<button id="tabBoard">개인판</button> <button id="tabInvest">투자</button> <button id="tabAchieved">이룬 버킷</button> <button id="tabAssets">자산 현황</button>';c.before(nav);el('tabBoard').onclick=()=>c.scrollIntoView();el('tabInvest').onclick=()=>{if(furthest>=5||sessionPhase==='settling'||sessionPhase==='finalSettling')location.href='/player/?session='+encodeURIComponent(sid)+'&module=investment';else alert('개인 행동을 완료한 뒤 투자할 수 있습니다.');};el('tabAchieved').onclick=()=>el('achievedFrame')?.scrollIntoView();el('tabAssets').onclick=()=>el('status').scrollIntoView();}if(!el('handFrame')){for(const id of ['handFrame','achievedFrame']){const section=document.createElement('section');section.id=id;section.className='card';c.after(section);}}if(sessionPhase==='settling'||sessionPhase==='finalSettling'){frame();c.innerHTML='<h2>투자 정산</h2><p>주사위 정산 후 이번 턴 개인판으로 이어집니다.</p><a href="/player/?session='+encodeURIComponent(sid)+'&module=investment">투자 정산 탭 열기</a>';return;}if(closingTurn){frame();negotiationScreen();return;}furthest=Math.max(furthest,step);for(let i=0;i<6;i++){const t=el('s'+i);t.classList.toggle('on',i===step);t.style.display=i===0&&!personalEventDue(turn)?'none':'';t.onclick=()=>{if(i<=furthest){step=i;render()}}}el('title').textContent=`Q${turn} · ${['개인 이벤트','임금 수령','버킷 채우기','업무능력 투자','버킷 처리','상품 투자'][step]}`;frame();if(step===0){
 c.innerHTML='<h2>개인 이벤트</h2><p>카드를 공개하고 함께 이야기하세요.</p>';
 const popup=document.createElement('div');popup.id='personalEventPopup';popup.setAttribute('role','dialog');popup.setAttribute('aria-modal','true');popup.setAttribute('aria-label','개인 이벤트');
 popup.style.cssText='position:fixed;inset:0;z-index:1000;background:#102238ee;display:flex;align-items:center;justify-content:center;padding:20px;overflow:auto';
@@ -42,7 +43,18 @@ popup.innerHTML='<section style="width:min(480px,100%);text-align:center;color:w
 document.body.append(popup);
 el('revealEvent').onclick=()=>{open=true;render()};
 if(revealed){el('completeEvent').disabled=busy;el('completeEvent').onclick=()=>onceAction('event',d=>({...d,cash:d.cash-100,event:'예상 밖의 지출'}),1);}
-}else if(step===1){const amounts=salaryRows[salaryLevel-1];c.innerHTML='<h2>임금 형태 선택 · 연봉 '+salaryLevel+'단계</h2><div class="choice">'+['휴가','기본근무','야근'].map((name,i)=>'<button data-pay="'+i+'">'+name+'<br>'+amounts[i]+'만 · 시간 '+(5-i)+'개</button>').join('')+'</div>';document.querySelectorAll('[data-pay]').forEach(b=>b.onclick=()=>{const i=+b.dataset.pay;onceAction('pay',d=>({...d,cash:d.cash+salaryRows[(d.salaryLevel||6)-1][i],time:d.time+5-i,payAmount:salaryRows[(d.salaryLevel||6)-1][i]}),2)});
+}else if(step===1){
+const amounts=salaryRows[salaryLevel-1];
+c.innerHTML='<h2>임금 수령</h2><p>'+(actions().pay?'이번 턴 수령 완료':'휴가·기본근무·야근 중 선택하세요.')+'</p>';
+if(actions().pay){
+ c.innerHTML+='<button id="payContinue">버킷 채우기로</button>';el('payContinue').onclick=()=>{step=2;render()};
+}else{
+ const popup=document.createElement('div');popup.id='salaryReceivePopup';popup.setAttribute('role','dialog');popup.setAttribute('aria-modal','true');popup.setAttribute('aria-label','임금과 시간 수령');
+ popup.style.cssText='position:fixed;inset:0;z-index:1000;background:#102238f5;display:flex;align-items:center;justify-content:center;padding:20px;overflow:auto';
+ popup.innerHTML='<section style="width:min(560px,100%);color:white;text-align:center"><p>Q'+turn+' · 임금 수령</p><h2>이번 턴의 근무 형태</h2><p>현재 현금 '+cash.toLocaleString()+'만 원 · 시간 '+time+'개</p>'+['휴가','기본근무','야근'].map((name,i)=>'<button data-pay="'+i+'" style="width:100%;display:block;margin:12px 0;padding:22px;border-radius:18px;text-align:left"><strong style="font-size:21px">'+name+'</strong><span style="display:block;margin-top:12px;font-size:19px">💵 '+amounts[i].toLocaleString()+'만 원　◷ '+(5-i)+'개</span></button>').join('')+'</section>';
+ document.body.append(popup);
+ popup.querySelectorAll('[data-pay]').forEach(b=>{b.disabled=busy;b.onclick=()=>{const i=+b.dataset.pay;popup.querySelectorAll('button').forEach(x=>x.disabled=true);onceAction('pay',d=>({...d,cash:d.cash+salaryRows[(d.salaryLevel||6)-1][i],time:d.time+5-i,payAmount:salaryRows[(d.salaryLevel||6)-1][i]}),2);};});
+}
 }else if(step===2){c.innerHTML='<h2>버킷 카드 채우기</h2><p>받은 카드는 위 개인판에서 확인할 수 있습니다.</p><button class="primary" id="next">카드 확인 완료</button>';el('next').textContent=actions().fill?'보충 완료 · 계속':'빈 자리 카드 받기';el('next').onclick=()=>onceAction('fill',d=>BucketDeck.fill(d,turn,BUCKET_CATALOG,shuffledBucketIds),3)}else if(step===3){
 const count=window.abilityCount||0;
 c.innerHTML='<h2>업무능력 투자</h2>'+[1,2,3,4].map(n=>'<div class="bucket"><b>'+n+'칸</b><small>추가 비용 '+(n*50)+'만 원 · 시간 2개 / '+(n===1?'협상 자격 획득':'주사위 보정 +'+(n-1))+'</small></div>').join('')+'<p>현재 '+count+'칸 · 이번 턴 1칸 투자 가능</p><button id="abilityAdd">다음 칸 투자 ('+((count+1)*50)+'만 원 · 시간 2개)</button> <button id="skip">계속</button>';

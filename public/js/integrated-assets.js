@@ -1,5 +1,17 @@
 /* Shared projection: investment records are the only source for investment cash flow. */
 const IntegratedAssets = (() => {
+  function resetTime(player, state) {
+    const turn=Number(state?.currentTurn)||1;
+    const closed=state?.phase==='quarterClosing'||state?.phase==='ended';
+    const boundary=closed&&turn%4===0?turn:Math.floor((turn-1)/4)*4;
+    if(!boundary||(player.timeResetTurn||0)>=boundary)return false;
+    const unused=Math.max(0,Number(player.time)||0);
+    player.time=0;
+    player.discardedTimeCount=(Number(player.discardedTimeCount)||0)+unused;
+    player.timeResetTurn=boundary;
+    player.timeResets={...player.timeResets,[boundary]:{discarded:unused}};
+    return true;
+  }
   function totals(session, pid) {
     let cashFlow=0, principal=0, profit=0;
     for(const inv of Object.values(session.investments||{})) {
@@ -14,6 +26,7 @@ const IntegratedAssets = (() => {
     if(!s||s.gameVersion!=='integrated-v3') return false;
     let changed=false;
     for(const [pid,p] of Object.entries(s.integrated||{})) {
+      if(resetTime(p,s.state))changed=true;
       const t=totals(s,pid), previous=p.investmentCashFlow||0;
       if(previous!==t.cashFlow||p.investmentPrincipal!==t.principal||p.investmentProfit!==t.profit) {
         p.cash=(Number(p.cash)||0)+t.cashFlow-previous;
@@ -41,5 +54,5 @@ const IntegratedAssets = (() => {
     });
     if(!result.committed)throw new Error('보유 현금이나 현재 턴 상태를 확인해 주세요.');
   }
-  return {totals,reconcile,watch,invest};
+  return {totals,reconcile,watch,invest,resetTime};
 })();
