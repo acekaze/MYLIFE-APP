@@ -403,7 +403,7 @@ const MasterApp = (() => {
     // 완료 카운트
     const thisTurnInvestors = new Set(investArr.filter(i => i.turn === state.currentTurn).map(i => i.playerId));
     const thisTurnSkippers = new Set(Object.values(skips).filter(s => s.turn === state.currentTurn).map(s => s.playerId));
-    const thisTurnDone = new Set([...thisTurnInvestors, ...thisTurnSkippers]);
+    const thisTurnDone = sessionData.gameVersion==='integrated-v3' ? new Set(Object.keys(players).filter(id=>TurnCompletion.status(sessionData,id).completed)) : new Set([...thisTurnInvestors, ...thisTurnSkippers]);
     const allDone = playerCount > 0 && thisTurnDone.size >= playerCount;
     const pendingMaturity = investArr.filter(i => i.maturityTurn <= state.currentTurn && i.result === 'pending');
 
@@ -1632,6 +1632,7 @@ const MasterApp = (() => {
 
   function nextTurn() {
     if(WorldBroadcast.pending(sessionData)){showToast('이번 턴 월드 이벤트를 공개하고 효과 적용을 마쳐 주세요.');return;}
+    if(sessionData.gameVersion==='integrated-v3'&&sessionData.state?.phase==='investing'&&Object.keys(sessionData.players||{}).some(id=>!TurnCompletion.status(sessionData,id).completed)){showToast('참가자의 이번 턴 종료를 기다려 주세요.');return;}
     const state = sessionData.state || {};
     const currentTurn = state.currentTurn || 1;
     const maxTurns = state.maxTurns || 20;
@@ -1672,6 +1673,7 @@ const MasterApp = (() => {
 
   function endGame() {
     if(WorldBroadcast.pending(sessionData)){showToast('마지막 월드 이벤트 적용을 먼저 마쳐 주세요.');return;}
+    if(sessionData.gameVersion==='integrated-v3'&&Object.keys(sessionData.players||{}).some(id=>!TurnCompletion.status(sessionData,id).completed)){showToast('참가자의 마지막 턴 종료를 기다려 주세요.');return;}
     if (!confirm('게임을 종료하시겠습니까?\n미만기 투자는 주사위를 굴려 경과 기간 비율로 정산됩니다.')) return;
 
     // 미만기 투자를 정산 대기 상태로 전환하고, 정산 phase로 변경
